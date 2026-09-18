@@ -11,7 +11,7 @@ LangGraph is used with plain dict state and typed reducers, no magic.
 """
 from __future__ import annotations
 
-from typing import Annotated, Any, TypedDict
+from typing import Any, TypedDict
 
 from . import pipeline
 from .models import Ticket

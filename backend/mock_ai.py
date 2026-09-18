@@ -193,7 +193,7 @@ def analyze_process_notes(user: str) -> dict:
         if not line.startswith("STEP|"):
             continue
         parts = line.split("|")
-        if len(parts) < 9:
+        if len(parts) < 8:
             continue
         _, name, minutes, rep, judg, money, pii, struct = parts[:8]
         minutes = float(minutes)

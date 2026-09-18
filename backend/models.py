@@ -187,6 +187,7 @@ class AgentTrace(BaseModel):
 
 
 class PipelineResult(BaseModel):
+    id: str = Field(default_factory=lambda: new_id("run"))
     ticket_id: str
     disposition: Disposition
     intake: IntakeResult | None = None

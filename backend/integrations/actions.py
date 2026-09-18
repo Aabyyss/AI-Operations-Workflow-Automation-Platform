@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import json
 
-from .. import config, store
+from .. import config
 from ..models import IntakeResult, Ticket, iso_now, new_id
+from ..store import storage
 from .audit import audit_log
 
 

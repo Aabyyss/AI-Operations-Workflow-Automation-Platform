@@ -69,3 +69,12 @@ class Storage:
 
 
 storage = Storage()
+
+
+# Module-level convenience wrappers (pipeline calls store.append(...)).
+def append(name: str, item: dict[str, Any]) -> None:
+    storage.append(name, item)
+
+
+def all(name: str) -> list[dict[str, Any]]:
+    return storage.all(name)

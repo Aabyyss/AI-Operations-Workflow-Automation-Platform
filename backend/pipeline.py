@@ -23,9 +23,9 @@ from . import config, store
 from .integrations import audit_log
 from .llm import get_llm, record_usage
 from .models import (
-    AgentTrace, DecisionResult, DraftResponse, IntakeResult, KnowledgeResult,
-    PipelineResult, Priority, QualityResult, ReviewRequest, Ticket,
-    TicketCategory, iso_now, new_id,
+    AgentTrace, DecisionResult, Disposition, DraftResponse, IntakeResult,
+    KnowledgeResult, PipelineResult, Priority, QualityResult, ReviewRequest,
+    Ticket, TicketCategory, iso_now, new_id,
 )
 from .rag import retriever
 
@@ -116,6 +116,8 @@ def run_decision(intake: IntakeResult, knowledge: KnowledgeResult, ticket: Ticke
         else:
             risk += 0.10
             reasons.append("small refund, within auto-approve policy")
+    if intake.category == TicketCategory.BILLING:
+        actions.append("send_reply")
     if intake.category in (TicketCategory.TECHNICAL,):
         actions.append("send_troubleshooting_steps")
         risk += 0.10
@@ -276,7 +278,7 @@ def run_escalation(ticket: Ticket, decision: DecisionResult, draft: DraftRespons
 def run_pipeline(ticket: Ticket) -> PipelineResult:
     trace: list[AgentTrace] = []
     usage_log: list = []
-    result = PipelineResult(ticket_id=ticket.id, disposition="failed")
+    result = PipelineResult(ticket_id=ticket.id, disposition=Disposition.FAILED)
 
     store.append("tickets", ticket.model_dump())
     try:
@@ -288,7 +290,7 @@ def run_pipeline(ticket: Ticket) -> PipelineResult:
             result.draft = run_draft(ticket, result.intake, result.knowledge, trace, usage_log)
             review = run_escalation(ticket, result.decision, result.draft, trace)
             result.review_id = review.id
-            result.disposition = "human_review"
+            result.disposition = Disposition.HUMAN_REVIEW
             result.final_response = None
         else:
             result.draft = run_draft(ticket, result.intake, result.knowledge, trace, usage_log)
@@ -297,7 +299,7 @@ def run_pipeline(ticket: Ticket) -> PipelineResult:
                 result.final_response = result.draft.text
                 result.actions_taken = run_actions(ticket, result.intake, result.decision,
                                                    result.final_response, trace)
-                result.disposition = "auto_resolved"
+                result.disposition = Disposition.AUTO_RESOLVED
                 audit_log("auto_resolved", {"ticket_id": ticket.id,
                                             "risk": result.decision.risk_score})
             else:
