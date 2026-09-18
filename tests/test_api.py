@@ -87,6 +87,15 @@ def test_demo_ticket_auto_resolves(client):
     assert r.json()["disposition"] == "auto_resolved"
 
 
+def test_runs_feed(client):
+    client.post("/api/tickets/demo")
+    runs = client.get("/api/runs").json()
+    assert len(runs) == 1
+    assert runs[0]["id"].startswith("run_")
+    assert runs[0]["disposition"] == "auto_resolved"
+    assert runs[0]["intake"]["category"] == "billing"
+
+
 def test_audit_log_records_events(client):
     client.post("/api/tickets/demo")
     events = [e["event"] for e in client.get("/api/audit").json()]

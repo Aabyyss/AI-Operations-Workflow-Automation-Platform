@@ -73,6 +73,12 @@ def get_ticket(ticket_id: str) -> dict:
     return run
 
 
+@app.get("/api/runs")
+def list_runs(limit: int = 50) -> list[dict]:
+    """Full pipeline run records — the BI 'Runs' table feed."""
+    return storage.all("runs")[-limit:]
+
+
 @app.post("/api/tickets/demo")
 def run_demo_ticket() -> dict:
     """Submit the canonical demo ticket (duplicate charge refund)."""
