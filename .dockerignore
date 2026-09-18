@@ -1,0 +1,11 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+data/
+tests/
+scripts/
+.pytest_cache
+*.md
+!knowledge_base/*.md

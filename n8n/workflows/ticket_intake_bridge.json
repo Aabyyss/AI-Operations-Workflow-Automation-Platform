@@ -1,0 +1,136 @@
+{
+  "name": "AI Ops Platform - Ticket Intake Bridge",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "new-ticket",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Ticket Webhook (email/ticketing system)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "aiops-new-ticket"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8000/api/tickets",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  customer_email: $json.body.customer_email || $json.customer_email,\n  subject: $json.body.subject || $json.subject,\n  body: $json.body.body || $json.body.text || $json.body,\n  channel: \"email\"\n}) }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Run AI Pipeline (/api/tickets)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "version": 2},
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.disposition }}",
+                    "rightValue": "human_review",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "needs human"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "version": 2},
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.disposition }}",
+                    "rightValue": "auto_resolved",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "auto resolved"
+            }
+          ]
+        },
+        "options": {"fallbackOutput": "extra", "renameFallbackOutput": "other"}
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Route by Disposition",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {"__rl": true, "value": "#support-escalations", "mode": "name"},
+        "text": "=:rotating_light: AI escalated ticket {{$json.ticket_id}} (risk {{$json.decision.risk_score}})\nReason: {{$json.decision.reason}}\nReview: review it in the platform dashboard -> /api/reviews\nSubject: {{$json.intake ? $json.ticket_id : $json.ticket_id}}",
+        "otherOptions": {}
+      },
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Slack Escalation Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [940, 180],
+      "webhookId": "aiops-slack-escalation"
+    },
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "No-op (auto-resolved: reply already sent by platform)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [940, 340]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ticket_id: $json.ticket_id, disposition: $json.disposition, review_id: $json.review_id || null }) }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Respond to Source System",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1180, 300]
+    }
+  ],
+  "connections": {
+    "Ticket Webhook (email/ticketing system)": {
+      "main": [[{"node": "Run AI Pipeline (/api/tickets)", "type": "main", "index": 0}]]
+    },
+    "Run AI Pipeline (/api/tickets)": {
+      "main": [[{"node": "Route by Disposition", "type": "main", "index": 0}]]
+    },
+    "Route by Disposition": {
+      "main": [
+        [{"node": "Slack Escalation Alert", "type": "main", "index": 0}],
+        [{"node": "No-op (auto-resolved: reply already sent by platform)", "type": "main", "index": 0}],
+        [{"node": "No-op (auto-resolved: reply already sent by platform)", "type": "main", "index": 0}]
+      ]
+    },
+    "Slack Escalation Alert": {
+      "main": [[{"node": "Respond to Source System", "type": "main", "index": 0}]]
+    },
+    "No-op (auto-resolved: reply already sent by platform)": {
+      "main": [[{"node": "Respond to Source System", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {"executionOrder": "v1"},
+  "pinData": {},
+  "active": false
+}
