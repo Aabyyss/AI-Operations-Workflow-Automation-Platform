@@ -1,0 +1,94 @@
+# AI Operations & Workflow Automation Platform
+
+An AI-powered platform that answers the questions businesses actually ask:
+
+> **Should we automate this?** → process analysis, automation scoring, ROI/cost engine
+> **How do we run it safely?** → agentic pipeline with RAG, risk gates, human approvals
+> **Is it actually working?** → cost, quality, latency, automation-rate monitoring
+
+Two sides in one system — **AI Product Management** (business case) and
+**AI Integration** (working pipeline + integrations).
+
+![dispositions](https://img.shields.io/badge/tests-25%2F25-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue)
+
+---
+
+## Quickstart
+
+```bash
+pip install -r requirements.txt
+python -m scripts.demo          # end-to-end walkthrough, prints ROI + pipeline results
+uvicorn backend.main:app --reload
+# open http://localhost:8000  -> operator dashboard
+```
+
+Runs fully offline in mock mode (deterministic, zero API keys). Set
+`AIOPS_MODE=live` + `OPENAI_API_KEY` to swap every LLM call to a real model —
+same contracts, same governance, real token costs.
+
+## What it does
+
+### Side A — AI Product Manager
+- Describe a process as steps (minutes, repetitive, judgment, money, PII).
+- The analyzer maps each step to **automate / assist / human_approval / keep**.
+- The ROI engine computes current vs AI-assisted cost, savings, payback,
+  first-year ROI, automation rate — every number traceable to an assumption.
+
+### Side B — AI Integration Specialist
+A support-ticket pipeline with six agents (LangGraph-orchestrated):
+
+```text
+intake -> knowledge(RAG) -> decision(risk engine) -> draft -> quality gate
+                                     |                     |
+                              low risk: execute      high risk: human review
+                              (refund, email, CRM)        approve / reject
+```
+
+Governance is code: refunds ≥ $500, 2FA changes, weak retrieval, or low
+confidence **always** land in the human approval queue — regardless of what
+the model claims. Every decision, action, and token is audit-logged.
+
+## Architecture
+
+```text
+dashboard/index.html          operator UI (served by the API)
+backend/
+  main.py                     FastAPI: analyze, tickets, reviews, analytics
+  analyzer.py                 process analyzer (Phase 1+2)
+  roi.py                      labor + token cost engine
+  pipeline.py                 6-agent pipeline + risk gates (source of truth)
+  graph.py                    LangGraph orchestration of the same pipeline
+  rag.py                      markdown -> chunks -> TF-IDF/live embeddings
+  llm.py                      mock / OpenAI-compatible gateway
+  mock_ai.py                  deterministic heuristics for offline mode
+  store.py                    swappable JSON persistence
+  integrations/               CRM, email, billing, Slack + audit log
+knowledge_base/               company policies (RAG corpus)
+n8n/workflows/                importable ticket-intake bridge workflow
+tests/                        25 tests: ROI math, RAG, governance, API
+```
+
+## API tour
+
+```bash
+curl -X POST localhost:8000/api/analyze -H "Content-Type: application/json" -d @docs/sample_process.json
+curl -X POST localhost:8000/api/tickets -H "Content-Type: application/json" \
+  -d '{"customer_email":"a@b.com","subject":"Charged twice","body":"Refund $49 please"}'
+curl localhost:8000/api/reviews                          # pending human approvals
+curl -X POST localhost:8000/api/reviews/<id>/decision \
+  -d '{"reviewer":"amy","note":"APPROVE"}'
+curl localhost:8000/api/analytics/summary                # Power BI feed
+```
+
+## Deployment
+
+```bash
+docker compose up --build    # API on :8000, n8n on :5678
+```
+
+## Roadmap
+
+- [ ] Postgres + pgvector behind the same `Storage` interface
+- [ ] n8n outbound poller executing the outbox against real vendor APIs
+- [ ] Quality-gate precision/recall dashboard from review outcomes
+- [ ] Per-process A/B: AI-assisted vs manual cycle-time tracking

@@ -1,0 +1,14 @@
+{
+  "name": "Customer Support Ticket Handling",
+  "department": "support",
+  "monthly_volume": 1500,
+  "hourly_rate_usd": 25.0,
+  "steps": [
+    {"name": "Read ticket", "minutes_per_item": 1.5, "repetitive": true, "touches_pii": true},
+    {"name": "Categorize ticket", "minutes_per_item": 1.0, "repetitive": true},
+    {"name": "Search knowledge base", "minutes_per_item": 2.5, "repetitive": true, "requires_judgment": true},
+    {"name": "Draft response", "minutes_per_item": 4.0, "repetitive": true, "requires_judgment": true},
+    {"name": "Process refund / update CRM", "minutes_per_item": 2.0, "repetitive": true, "touches_money": true, "touches_pii": true},
+    {"name": "Manager review of hard cases", "minutes_per_item": 3.0, "repetitive": false, "requires_judgment": true}
+  ]
+}
