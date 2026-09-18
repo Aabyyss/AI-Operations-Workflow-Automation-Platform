@@ -124,7 +124,8 @@ def run_decision(intake: IntakeResult, knowledge: KnowledgeResult, ticket: Ticke
     if intake.category == TicketCategory.ACCOUNT:
         actions.append("send_reset_guidance")
         risk += 0.05
-        if "2fa" in ticket.body.lower():
+        account_text = (ticket.subject + " " + ticket.body).lower()
+        if "2fa" in account_text or "two-factor" in account_text or "two factor" in account_text:
             risk += 0.55
             reasons.append("2FA removal is a security-controlled action")
     if intake.category == TicketCategory.SALES:

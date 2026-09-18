@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Operations &amp; Workflow Automation Platform</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#131a30; --panel2:#1a2342; --line:#26325a;
+    --text:#e8ecf8; --muted:#93a0c4; --accent:#5b8cff; --good:#3ddc97;
+    --warn:#ffb454; --bad:#ff6b7a;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{background:var(--bg); color:var(--text);
+       font:15px/1.5 "Segoe UI", system-ui, sans-serif; padding:24px}
+  h1{font-size:22px; font-weight:600}
+  h2{font-size:15px; font-weight:600; color:var(--muted);
+     text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px}
+  .wrap{max-width:1180px; margin:0 auto}
+  .row{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px}
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin:14px 0}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px}
+  .kpi{font-size:26px; font-weight:700; margin-top:2px}
+  .kpi small{font-size:13px; color:var(--muted); font-weight:400}
+  .muted{color:var(--muted); font-size:13px}
+  .good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+  table{width:100%; border-collapse:collapse; font-size:13.5px}
+  th{color:var(--muted); text-align:left; font-weight:600; padding:6px 8px;
+     border-bottom:1px solid var(--line); text-transform:uppercase; font-size:11px; letter-spacing:.06em}
+  td{padding:7px 8px; border-bottom:1px solid var(--panel2)}
+  tr:last-child td{border-bottom:none}
+  button{background:var(--accent); border:none; color:#fff; padding:9px 14px;
+         border-radius:8px; font-weight:600; cursor:pointer; font-size:13.5px}
+  button.ghost{background:transparent; border:1px solid var(--line); color:var(--muted)}
+  button.approve{background:var(--good); color:#06281a}
+  button.reject{background:transparent; border:1px solid var(--bad); color:var(--bad)}
+  button:hover{filter:brightness(1.1)}
+  .pill{display:inline-block; padding:2px 9px; border-radius:99px; font-size:11.5px; font-weight:600}
+  .pill.auto{background:#0e3b2a; color:var(--good)}
+  .pill.review{background:#3b2f0e; color:var(--warn)}
+  .pill.approved{background:#0e3b2a; color:var(--good)}
+  .pill.rejected{background:#3b1219; color:var(--bad)}
+  .pill.pending{background:#22284a; color:var(--muted)}
+  textarea{width:100%; min-height:74px; background:var(--panel2); color:var(--text);
+           border:1px solid var(--line); border-radius:8px; padding:10px; font:13px/1.45 inherit}
+  input{width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--line);
+        border-radius:8px; padding:9px 10px; font:13.5px inherit}
+  label{display:block; font-size:12px; color:var(--muted); margin:8px 0 3px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  pre{background:var(--panel2); border:1px solid var(--line); border-radius:8px;
+      padding:10px; font-size:12px; overflow:auto; max-height:220px; white-space:pre-wrap}
+  .hidden{display:none}
+  .bar{height:8px; background:var(--panel2); border-radius:99px; overflow:hidden; margin-top:6px}
+  .bar>i{display:block; height:100%; background:var(--accent)}
+  .bar>i.g{background:var(--good)} .bar>i.w{background:var(--warn)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px">
+    <div>
+      <h1>AI Operations &amp; Workflow Automation Platform</h1>
+      <div class="muted">Should we automate this? · How do we run it safely? · Is it actually working?</div>
+    </div>
+    <button class="ghost" onclick="loadAll()">Refresh</button>
+  </div>
+
+  <div class="cards" id="kpis"></div>
+
+  <div class="row">
+    <!-- Side A: process analysis -->
+    <div class="card">
+      <h2>Side A · Process Analyzer &amp; ROI</h2>
+      <label>Process name</label>
+      <input id="p_name" value="Customer Support Ticket Handling">
+      <label>Department / monthly volume / hourly rate ($)</label>
+      <div class="grid2" style="grid-template-columns:1fr 1fr 1fr">
+        <input id="p_dept" value="support">
+        <input id="p_vol" type="number" value="1500">
+        <input id="p_rate" type="number" value="25">
+      </div>
+      <label>Steps — one per line: name | minutes | repetitive(0/1) | judgment(0/1) | money(0/1) | pii(0/1)</label>
+      <textarea id="p_steps">Read ticket | 1.5 | 1 | 0 | 0 | 1
+Categorize ticket | 1.0 | 1 | 0 | 0 | 0
+Search knowledge base | 2.5 | 1 | 1 | 0 | 0
+Draft response | 4.0 | 1 | 1 | 0 | 0
+Process refund / update CRM | 2.0 | 1 | 0 | 1 | 1
+Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
+      <div style="margin-top:10px; display:flex; gap:8px">
+        <button onclick="analyze()">Analyze ROI</button>
+      </div>
+      <div id="analysis_out" style="margin-top:12px"></div>
+    </div>
+
+    <!-- Side B: live pipeline -->
+    <div class="card">
+      <h2>Side B · Agentic Pipeline</h2>
+      <label>Customer email</label>
+      <input id="t_email" value="jordan.miles@northwind.example">
+      <label>Subject</label>
+      <input id="t_subject" value="Charged twice for my subscription">
+      <label>Body</label>
+      <textarea id="t_body">I've been charged twice for my subscription this month — $49.00 on the 3rd and again on the 5th. I need one of the charges refunded.</textarea>
+      <div style="margin-top:10px; display:flex; gap:8px">
+        <button onclick="submitTicket()">Run pipeline</button>
+        <button class="ghost" onclick="demoTicket()">Run canonical demo ticket</button>
+      </div>
+      <div id="ticket_out" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- Approvals -->
+  <div class="card" style="margin-top:14px">
+    <h2>Human-in-the-Loop · Approval Queue</h2>
+    <div id="reviews_out" class="muted">Loading…</div>
+  </div>
+
+  <!-- Monitoring -->
+  <div class="row" style="margin-top:14px">
+    <div class="card">
+      <h2>Cost by Agent (USD)</h2>
+      <table id="cost_tbl"><thead><tr><th>Agent</th><th>Calls</th><th>Tokens in/out</th><th>Cost</th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="card">
+      <h2>Dispositions</h2>
+      <div id="disp_out" class="muted">No runs yet.</div>
+      <h2 style="margin-top:16px">Recent Audit Events</h2>
+      <div id="audit_out" class="muted">Loading…</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>Recent Ticket Runs</h2>
+    <div id="runs_out" class="muted">No runs yet.</div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const money = (v) => "$" + Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+async function api(path, opts) {
+  const r = await fetch(path, opts ? {headers:{"Content-Type":"application/json"}, ...opts} : undefined);
+  if (!r.ok) throw new Error((await r.json().catch(()=>({detail:r.statusText}))).detail || r.statusText);
+  return r.json();
+}
+
+async function loadAll() {
+  try {
+    const [summary, reviews, usage, audit, runs] = await Promise.all([
+      api("/api/analytics/summary"),
+      api("/api/reviews"),
+      api("/api/usage"),
+      api("/api/audit?limit=12"),
+      api("/api/tickets"),
+    ]);
+    renderKpis(summary);
+    renderCosts(usage);
+    renderDispositions(summary);
+    renderReviews(reviews);
+    renderAudit(audit);
+    renderRuns(runs);
+  } catch (e) { console.error(e); }
+}
+
+function renderKpis(s) {
+  const k = [
+    ["Tickets processed", s.tickets_processed, ""],
+    ["Automation rate", s.automation_rate_pct, "%"],
+    ["Pending approvals", s.pending_reviews, ""],
+    ["LLM spend", "$" + (s.total_llm_cost_usd||0).toFixed(4), ""],
+    ["Est. monthly savings", money(s.estimated_monthly_savings_usd||0), ""],
+    ["Avg latency", s.avg_pipeline_latency_ms, "ms"],
+  ];
+  $("kpis").innerHTML = k.map(([l,v,u]) =>
+    `<div class="card"><div class="muted">${l}</div><div class="kpi">${esc(v)}<small>${u}</small></div></div>`).join("");
+}
+
+function renderCosts(usage) {
+  const by = {};
+  usage.forEach(u => { by[u.agent] = (by[u.agent]||0) + u.cost_usd; });
+  const rows = Object.entries(by).sort((a,b)=>b[1]-a[1]);
+  $("cost_tbl").querySelector("tbody").innerHTML = rows.length ? rows.map(([a,c]) =>
+    `<tr><td>${esc(a)}</td><td>${money(c)}</td></tr>`).join("")
+    : `<tr><td colspan="2" class="muted">No usage recorded yet</td></tr>`;
+}
+
+function renderDispositions(s) {
+  const d = s.dispositions || {};
+  const entries = Object.entries(d);
+  $("disp_out").innerHTML = entries.length ? entries.map(([k,v]) => {
+    const cls = k.includes("auto") ? "g" : (k.includes("review") ? "w" : "");
+    const pct = Math.round(100*v/Math.max(1, Object.values(d).reduce((a,b)=>a+b,0)));
+    return `<div style="margin:6px 0"><div class="muted">${esc(k)} — ${v} (${pct}%)</div><div class="bar"><i class="${cls}" style="width:${pct}%"></i></div></div>`;
+  }).join("") : "No runs yet.";
+}
+
+function renderReviews(reviews) {
+  if (!reviews.length) { $("reviews_out").innerHTML = '<span class="muted">Queue empty — nothing needs a human right now.</span>'; return; }
+  $("reviews_out").innerHTML = reviews.map(r => `
+    <div style="border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px">
+      <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap">
+        <div><span class="pill ${r.status}">${r.status}</span>
+             <b>${esc(r.id)}</b> <span class="muted">for ${esc(r.ticket_id)}</span></div>
+        <div class="muted">risk ${r.risk_score} · ${esc(r.reason||"")}</div>
+      </div>
+      <div style="background:var(--panel2); border-radius:8px; padding:10px; margin-top:8px; font-size:13px">${esc(r.proposed_response)}</div>
+      <div class="muted" style="margin-top:6px">Proposed actions: ${esc((r.proposed_actions||[]).join(", ")||"—")}</div>
+      ${r.status==="pending" ? `<div style="margin-top:8px; display:flex; gap:8px">
+        <button class="approve" onclick="decide('${r.id}', 'APPROVE')">Approve &amp; execute</button>
+        <button class="reject" onclick="decide('${r.id}', 'REJECT')">Reject</button></div>` : ""}
+    </div>`).join("");
+}
+
+function renderAudit(events) {
+  $("audit_out").innerHTML = events.length ? events.slice().reverse().map(e =>
+    `<div style="margin:3px 0"><span class="muted">${esc((e.ts||"").slice(11,19))}</span> <b>${esc(e.event)}</b> <span class="muted">${esc(JSON.stringify(e.payload).slice(0,110))}</span></div>`
+  ).join("") : "No events yet.";
+}
+
+function renderRuns(tickets) {
+  if (!tickets.length) { $("runs_out").innerHTML = '<span class="muted">No runs yet.</span>'; return; }
+  const ids = [...new Set(tickets.map(t=>t.id))].slice(-8).reverse();
+  $("runs_out").innerHTML = ids.map(id => `<div style="margin:4px 0"><b>${esc(id)}</b> <span class="muted">${esc(tickets.find(t=>t.id===id).subject||"")}</span></div>`).join("");
+}
+
+async function analyze() {
+  const steps = $("p_steps").value.split("\n").filter(l=>l.trim()).map(l=>{
+    const [name, min, rep, jud, mon, pii] = l.split("|").map(s=>s.trim());
+    return {name, minutes_per_item:parseFloat(min), repetitive:rep==="1",
+            requires_judgment:jud==="1", touches_money:mon==="1", touches_pii:pii==="1", structured_data:true};
+  });
+  const body = {name:$("p_name").value, department:$("p_dept").value,
+                monthly_volume:parseInt($("p_vol").value), hourly_rate_usd:parseFloat($("p_rate").value), steps};
+  $("analysis_out").innerHTML = '<span class="muted">Analyzing…</span>';
+  try {
+    const a = await api("/api/analyze", {method:"POST", body:JSON.stringify(body)});
+    const c = a.costs;
+    $("analysis_out").innerHTML = `
+      <div class="pill ${a.score.verdict==="high_potential"?"auto":a.score.verdict==="moderate"?"review":"rejected"}">${a.score.verdict}</div>
+      <b> Automation score ${a.score.total}/100</b>
+      <div class="muted">${esc(a.score.rationale)}</div>
+      <table style="margin-top:8px">
+        <tr><td>Current monthly cost</td><td><b>${money(c.current_monthly_cost_usd)}</b></td></tr>
+        <tr><td>AI-assisted monthly cost</td><td><b>${money(c.ai_monthly_cost_usd)}</b></td></tr>
+        <tr><td>Monthly savings</td><td><b class="good">${money(c.monthly_savings_usd)}</b></td></tr>
+        <tr><td>Implementation (one-off)</td><td>${money(c.implementation_cost_usd)}</td></tr>
+        <tr><td>Payback</td><td>${c.payback_months<0?"—":c.payback_months+" months"}</td></tr>
+        <tr><td>First-year ROI</td><td><b>${c.first_year_roi_pct}%</b></td></tr>
+        <tr><td>Automation rate</td><td>${c.automation_rate_pct}% of volume</td></tr>
+      </table>
+      <div class="muted" style="margin-top:6px">Step mapping: ${a.ai_mapping.map(m=>`${esc(m.step)} → ${esc(m.recommendation)}`).join(" · ")}</div>`;
+  } catch(e) { $("analysis_out").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+}
+
+async function submitTicket() {
+  $("ticket_out").innerHTML = '<span class="muted">Running pipeline…</span>';
+  try {
+    const r = await api("/api/tickets", {method:"POST", body:JSON.stringify({
+      customer_email:$("t_email").value, subject:$("t_subject").value, body:$("t_body").value})});
+    renderRun(r);
+    loadAll();
+  } catch(e) { $("ticket_out").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+}
+
+async function demoTicket() {
+  $("ticket_out").innerHTML = '<span class="muted">Running pipeline…</span>';
+  try { renderRun(await api("/api/tickets/demo", {method:"POST"})); loadAll(); }
+  catch(e) { $("ticket_out").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+}
+
+function renderRun(r) {
+  const pills = {auto_resolved:"auto", human_review:"review", approved_executed:"approved", rejected:"rejected", failed:"rejected"};
+  const steps = (r.trace||[]).map(t => `<tr><td>${esc(t.agent)}</td><td>${t.duration_ms} ms</td><td>${esc(t.output_summary.slice(0,90))}</td></tr>`).join("");
+  $("ticket_out").innerHTML = `
+    <div class="pill ${pills[r.disposition]||"pending"}">${r.disposition}</div>
+    ${r.review_id ? `<span class="muted"> review ${esc(r.review_id)} queued</span>` : ""}
+    <div class="muted" style="margin-top:4px">cost $${(r.total_cost_usd||0).toFixed(5)} · ${r.total_latency_ms} ms · risk ${r.decision?r.decision.risk_score:"—"}</div>
+    ${r.final_response ? `<div style="background:var(--panel2); border-radius:8px; padding:10px; margin-top:8px; font-size:13px">${esc(r.final_response)}</div>` : ""}
+    ${r.error ? `<div class="bad">${esc(r.error)}</div>` : ""}
+    <table style="margin-top:8px"><tbody>${steps}</tbody></table>`;
+}
+
+async function decide(id, verdict) {
+  await api(`/api/reviews/${id}/decision`, {method:"POST", body:JSON.stringify({reviewer:"dashboard_operator", note:verdict})});
+  loadAll();
+}
+
+loadAll();
+</script>
+</body>
+</html>

@@ -198,8 +198,10 @@ def analyze_process_notes(user: str) -> dict:
         _, name, minutes, rep, judg, money, pii, struct = parts[:8]
         minutes = float(minutes)
         rep, judg, money, pii, struct = (x == "1" for x in (rep, judg, money, pii, struct))
-        if money or pii:
-            rec, why = "human_approval", "Touches money or PII — keep a human sign-off."
+        if money:
+            rec, why = "human_approval", "Touches money — keep a human sign-off."
+        elif pii:
+            rec, why = "assist", "PII involved — AI can process with audit trail and human oversight."
         elif rep and struct:
             rec, why = "automate", "Repetitive and structured — highest ROI to automate."
         elif judg:
