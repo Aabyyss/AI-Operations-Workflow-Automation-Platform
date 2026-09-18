@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+      - name: Run test suite
+        env:
+          AIOPS_MODE: mock
+        run: python -m pytest -v
+      - name: Smoke-test API boot
+        run: |
+          uvicorn backend.main:app --port 8077 &
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:8077/health && break || sleep 1
+          done
+          curl -sf http://localhost:8077/health | grep -q '"status":"ok"'
+          curl -sf -X POST http://localhost:8077/api/tickets/demo | grep -q '"disposition":"auto_resolved"'
