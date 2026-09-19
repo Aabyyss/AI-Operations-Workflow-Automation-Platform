@@ -31,9 +31,21 @@ CHAT_MODEL = os.getenv("AIOPS_CHAT_MODEL", "gpt-4o-mini")
 EMBED_MODEL = os.getenv("AIOPS_EMBED_MODEL", "text-embedding-3-small")
 
 # ---------------------------------------------------------------------------
-# Token pricing (USD per 1M tokens) — input, output.
-# Edit here to reprice; the ROI engine and cost tracker read from this.
+# Governance thresholds — the heart of the human-in-the-loop story.
+# Env-overridable so ops can tune per deployment without a code change.
 # ---------------------------------------------------------------------------
+AUTO_EXECUTE_MAX_RISK = float(os.getenv("AIOPS_AUTO_EXECUTE_MAX_RISK", "0.30"))  # <= this -> run without a human
+BLOCK_MIN_RISK = 0.85            # > this -> never auto-run, always review
+
+# Monetary limits: any action touching money above this always requires
+# human approval regardless of classifier confidence.
+MONETARY_APPROVAL_LIMIT_USD = float(os.getenv("AIOPS_MONETARY_APPROVAL_LIMIT_USD", "500.0"))
+
+# Minimum retrieval similarity for the Knowledge Agent to trust a document.
+MIN_RETRIEVAL_SCORE = float(os.getenv("AIOPS_MIN_RETRIEVAL_SCORE", "0.15"))
+
+# Minimum blended confidence (decision + quality) to auto-execute.
+MIN_AUTO_CONFIDENCE = float(os.getenv("AIOPS_MIN_AUTO_CONFIDENCE", "0.75"))
 TOKEN_PRICING: dict[str, tuple[float, float]] = {
     "gpt-4o-mini": (0.15, 0.60),
     "gpt-4o": (2.50, 10.00),
@@ -44,22 +56,6 @@ TOKEN_PRICING: dict[str, tuple[float, float]] = {
 # Default blended cost per resolved ticket used when no real usage data
 # exists yet (estimate until monitoring fills in actuals).
 DEFAULT_COST_PER_TICKET_USD = 0.012
-
-# ---------------------------------------------------------------------------
-# Governance thresholds — the heart of the human-in-the-loop story.
-# ---------------------------------------------------------------------------
-AUTO_EXECUTE_MAX_RISK = 0.30     # <= this -> run without a human
-BLOCK_MIN_RISK = 0.85            # > this -> never auto-run, always review
-
-# Monetary limits: any action touching money above this always requires
-# human approval regardless of classifier confidence.
-MONETARY_APPROVAL_LIMIT_USD = 500.0
-
-# Minimum retrieval similarity for the Knowledge Agent to trust a document.
-MIN_RETRIEVAL_SCORE = 0.15
-
-# Minimum blended confidence (decision + quality) to auto-execute.
-MIN_AUTO_CONFIDENCE = 0.75
 
 # ---------------------------------------------------------------------------
 # Labor economics used by the ROI engine (defaults, overridable per process)
