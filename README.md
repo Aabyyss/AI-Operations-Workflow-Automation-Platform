@@ -17,6 +17,7 @@ Two sides in one system — **AI Product Management** (business case) and
 
 ```bash
 pip install -r requirements.txt
+cp .env.example .env            # optional — defaults run offline in mock mode
 python -m scripts.demo          # end-to-end walkthrough, prints ROI + pipeline results
 uvicorn backend.main:app --reload
 # open http://localhost:8000  -> operator dashboard
@@ -85,6 +86,17 @@ curl localhost:8000/api/analytics/summary                # Power BI feed
 ```bash
 docker compose up --build    # API on :8000, n8n on :5678
 ```
+
+## Documentation
+
+| Doc | What's in it |
+|---|---|
+| [docs/design.md](docs/design.md) | System design: architecture, agents, risk gates, RAG, ROI math |
+| [docs/project-plan.md](docs/project-plan.md) | Milestones, roadmap, backlog, risks, definition of done |
+| [docs/GOVERNANCE.md](docs/GOVERNANCE.md) | The human-in-the-loop model and its thresholds |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module walkthrough with request traces |
+| [docs/BI_INTEGRATION.md](docs/BI_INTEGRATION.md) | Power BI / analytics feed endpoints and schema |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Day-2: config, storage, troubleshooting, backup |
 
 ## Roadmap
 
