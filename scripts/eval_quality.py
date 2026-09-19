@@ -12,6 +12,7 @@ Run:  python -m scripts.eval_quality
 """
 from __future__ import annotations
 
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -163,8 +164,11 @@ def report(correct: int, total: int, results: list[dict]) -> None:
 
 def main() -> int:
     _isolate_data_dir()
-    correct, total, results = run_eval()
-    report(correct, total, results)
+    try:
+        correct, total, results = run_eval()
+        report(correct, total, results)
+    finally:
+        shutil.rmtree(config.DATA_DIR, ignore_errors=True)  # no temp litter
     ok = correct == total
     print(f"\n{'PASS' if ok else 'FAIL'}: {'all cases match governance labels' if ok else 'routing diverged from labels — do not ship'}")
     return 0 if ok else 1

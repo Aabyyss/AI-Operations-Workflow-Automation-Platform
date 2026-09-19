@@ -306,7 +306,7 @@ def run_pipeline(ticket: Ticket) -> PipelineResult:
             else:
                 review = run_escalation(ticket, result.decision, result.draft, trace)
                 result.review_id = review.id
-                result.disposition = "human_review"
+                result.disposition = Disposition.HUMAN_REVIEW
                 audit_log("quality_failed_escalated", {
                     "ticket_id": ticket.id, "issues": result.quality.issues})
 
