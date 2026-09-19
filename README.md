@@ -9,7 +9,7 @@ An AI-powered platform that answers the questions businesses actually ask:
 Two sides in one system — **AI Product Management** (business case) and
 **AI Integration** (working pipeline + integrations).
 
-![dispositions](https://img.shields.io/badge/tests-25%2F25-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue)
+[![CI](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml) ![dispositions](https://img.shields.io/badge/tests-28%2F28-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue) ![eval](https://img.shields.io/badge/eval-8%2F8%20routing%20accuracy-brightgreen)
 
 ---
 
@@ -19,6 +19,7 @@ Two sides in one system — **AI Product Management** (business case) and
 pip install -r requirements.txt
 cp .env.example .env            # optional — defaults run offline in mock mode
 python -m scripts.demo          # end-to-end walkthrough, prints ROI + pipeline results
+python -m scripts.eval_quality  # governance eval: routing accuracy + escalation recall
 uvicorn backend.main:app --reload
 # open http://localhost:8000  -> operator dashboard
 ```
