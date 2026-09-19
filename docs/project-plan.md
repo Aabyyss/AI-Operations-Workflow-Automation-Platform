@@ -37,7 +37,7 @@ in one working system.
 | 10 | Tests + CI (3.11–3.13) | ✅ | 25/25 green in GitHub Actions |
 | 11 | Postgres + pgvector behind `Storage` | ⬜ next | same interface, migration script |
 | 12 | Outbound n8n executor (outbox → real vendors) | ⬜ | dry-run replay mode |
-| 13 | Quality eval harness (labeled ticket set) | ⬜ | routing precision/recall report |
+| 13 | Quality eval harness (labeled ticket set) | ✅ | `python -m scripts.eval_quality`: 8/8 routing accuracy, 100% escalation recall, CI `eval-quality` job |
 
 ## 3. Development roadmap (phases)
 
@@ -60,8 +60,9 @@ Phases 1–8 are complete; the roadmap items below extend the same skeleton.
   embeddings table for live-mode retrieval.
 - **Outbound n8n executor** — poll outbox, execute against real Gmail/Slack/HubSpot
   APIs, replay-safe dry-run mode.
-- **Evaluation harness** — 50-ticket labeled set; report routing accuracy,
-  gate precision/recall, cost per ticket; runs in CI as a regression gate.
+- **Evaluation harness** — ✅ shipped: labeled set with routing accuracy,
+  escalation recall, cost per ticket; runs in CI as a regression gate.
+  Extend the label set as new ticket families appear.
 - **A/B cycle-time tracking** — tag tickets AI-assisted vs manual, compare
   resolution time in analytics.
 - **Auth + roles** — operator vs approver vs admin for the dashboard.
@@ -70,7 +71,7 @@ Phases 1–8 are complete; the roadmap items below extend the same skeleton.
 
 | Risk | Mitigation |
 |---|---|
-| LLM quality regresses with a live model | Deterministic gates stay; eval harness will gate CI |
+| LLM quality regresses with a live model | Deterministic gates stay; `eval-quality` CI job gates every push |
 | Scope creep into "enterprise everything" | Non-goals above; one vertical (support tickets) done deeply |
 | Demo only works with API keys | Mock mode is the default; CI proves the whole pipeline offline |
 | Numbers look made up | ROI emits its assumptions next to every figure |

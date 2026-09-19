@@ -50,9 +50,12 @@ for future evaluation.
 that humans edit = quality-gate misses; rejection rate by category = risk
 model calibration data. `/api/analytics/summary` tracks the split.
 
-**Offline:** the 25-test suite pins the governance behavior — money limits,
-security gates, retrieval floors, PII leaks. Any change to thresholds shows
-up as a red test before it shows up as an incident.
+**Offline:** the test suite pins the governance behavior — money limits,
+security gates, retrieval floors, PII leaks. On top of it, the eval harness
+(`python -m scripts.eval_quality`) scores routing accuracy and escalation
+recall against a governance-labeled ticket set; a dedicated CI job fails the
+build if routing diverges. Any change to thresholds shows up as a red check
+before it shows up as an incident.
 
 **Cost:** every LLM call records tokens + USD by agent (`/api/usage`), so
 unit economics (cost per resolved ticket) is a query, not a guess. In mock
