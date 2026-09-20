@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 
 from . import config, designer, pipeline, store
+from .analytics import approval_sla_metrics
 from .analyzer import analyze_process
 from .integrations import actions as integ
 from .integrations.audit import audit_log
@@ -196,6 +197,15 @@ def decide_review(review_id: str, decision: ReviewDecision) -> dict:
 # ---------------------------------------------------------------------------
 # Monitoring & analytics (Power BI feed)
 # ---------------------------------------------------------------------------
+@app.get("/api/analytics/approvals")
+def approval_sla() -> dict:
+    """Human-approval queue SLA: aging, turnaround, escalation rate."""
+    from datetime import datetime, timezone
+    reviews = storage.all("reviews")
+    runs_count = len(storage.all("runs"))
+    return approval_sla_metrics(reviews, runs_count, datetime.now(timezone.utc))
+
+
 @app.get("/api/usage")
 def usage_records() -> list[dict]:
     return storage.all("usage")
