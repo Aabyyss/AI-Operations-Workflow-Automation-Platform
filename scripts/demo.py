@@ -11,9 +11,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from backend import config, pipeline  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
+
+from backend import config, designer, pipeline  # noqa: E402
+from backend.analytics import approval_sla_metrics  # noqa: E402
 from backend.analyzer import analyze_process  # noqa: E402
-from backend.models import ProcessInput, ProcessStep, Ticket  # noqa: E402
+from backend.models import (ProcessInput, ProcessStep, Ticket,  # noqa: E402
+                            WorkflowDesignRequest)
+from backend.run_metrics import run_performance_metrics  # noqa: E402
 from backend.store import storage  # noqa: E402
 
 
@@ -47,6 +52,7 @@ def side_a() -> None:
         ],
     )
     analysis, _ = analyze_process(p)
+    storage.append("analyses", analysis.model_dump())  # API route does this too
     s, c = analysis.score, analysis.costs
     print(f"\nProcess: {analysis.name}")
     print(f"Automation score : {s.total}/100 ({s.verdict})")
@@ -64,6 +70,15 @@ def side_a() -> None:
     print("\nAssumptions:")
     for a in analysis.assumptions:
         print(f"  - {a}")
+
+    # The bridge from Side A to Side B: emit the importable n8n workflow.
+    wf = designer.design_from_request(
+        analysis.model_dump(), WorkflowDesignRequest(process_id=analysis.process_id))
+    print(f"\nGenerated n8n workflow: {wf['name']}")
+    print(f"  nodes: {wf['node_count']} (intake webhook -> agentic pipeline -> "
+          f"risk-gated escalation, hourly monitoring digest, AI-mapping note)")
+    print(f"  import via n8n: File -> Import from File (GET "
+          f"/api/workflows/{{id}}/download)")
 
 
 def _ticket(subject: str, body: str, email: str) -> Ticket:
@@ -100,18 +115,25 @@ def side_b() -> None:
                 "nonprofit discounts?",
                 "hello@newstartup.example"),
     ]
-    for t in tickets:
-        r = pipeline.run_pipeline(t)
-        risk = r.decision.risk_score if r.decision else "-"
+    # One batch request, exactly as n8n or an email export would submit them.
+    from fastapi.testclient import TestClient  # reuse the same route logic
+    from backend.main import app
+    with TestClient(app) as client:
+        out = client.post("/api/tickets/batch",
+                          json={"tickets": [t.model_dump() for t in tickets]}).json()
+    print(f"\nBatch summary: {out['summary']}")
+    for t, r in zip(tickets, out["results"]):
+        risk = r["decision"]["risk_score"] if r.get("decision") else "-"
         print(f"\n[{t.subject}]")
-        print(f"  disposition={r.disposition.value}  risk={risk}  "
-              f"cost=${r.total_cost_usd:.5f}  latency={r.total_latency_ms}ms")
-        if r.disposition == "auto_resolved":
-            print(f"  actions: {', '.join(r.actions_taken)}")
-        elif r.review_id:
-            print(f"  escalated -> {r.review_id} ({r.decision.reason if r.decision else ''})")
-        if r.error:
-            print(f"  ERROR: {r.error}")
+        print(f"  disposition={r['disposition']}  risk={risk}  "
+              f"cost=${r['total_cost_usd']:.5f}  latency={r['total_latency_ms']}ms")
+        if r["disposition"] == "auto_resolved":
+            print(f"  actions: {', '.join(r['actions_taken'])}")
+        elif r.get("review_id"):
+            reason = r["decision"]["reason"] if r.get("decision") else ""
+            print(f"  escalated -> {r['review_id']} ({reason})")
+        if r.get("error"):
+            print(f"  ERROR: {r['error']}")
 
 
 def approve_one() -> None:
@@ -155,7 +177,26 @@ def summary() -> None:
               f"tokens={row['tokens_in']}/{row['tokens_out']}  cost=${row['cost_usd']:.5f}")
     print(f"\nEstimated monthly savings (latest analysis): "
           f"${s['estimated_monthly_savings_usd']:,}")
-    print("\nData written to ./data/ -> Power BI / n8n can consume via the API.")
+
+    runs = storage.all("runs")
+    sla = approval_sla_metrics(storage.all("reviews"), len(runs),
+                               datetime.now(timezone.utc))
+    perf = run_performance_metrics(runs)
+    print("\nApproval-queue SLA (GET /api/analytics/approvals):")
+    print(f"  pending={sla['pending']}  oldest={sla['oldest_pending_minutes']}m  "
+          f"aging={sla['aging_buckets']}")
+    print(f"  human turnaround median={sla['turnaround_minutes']['median']}m  "
+          f"escalation rate={sla['escalation_rate_pct']}%")
+    print("\nPipeline performance (GET /api/analytics/runs):")
+    print(f"  latency p50={perf['latency_ms']['p50']}ms  "
+          f"p95={perf['latency_ms']['p95']}ms  max={perf['latency_ms']['max']}ms")
+    print(f"  containment={perf['containment_rate_pct']}%  "
+          f"human-touch={perf['human_touch_rate_pct']}%  "
+          f"failure={perf['failure_rate_pct']}%")
+    print(f"  cost per run mean=${perf['cost_per_run_usd']['mean']:.5f}  "
+          f"p95=${perf['cost_per_run_usd']['p95']:.5f}")
+    print("\nBI exports: GET /api/export/runs.csv, approvals.csv, usage.csv")
+    print("Data written to ./data/ -> Power BI / n8n can consume via the API.")
     print("Start the API with: uvicorn backend.main:app --reload")
 
 
