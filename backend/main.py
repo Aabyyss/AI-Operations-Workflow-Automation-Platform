@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 
-from . import config, designer, pipeline, store
+from . import config, designer, exports, pipeline, store
 from .analytics import approval_sla_metrics
 from .analyzer import analyze_process
 from .run_metrics import run_performance_metrics
@@ -278,6 +278,33 @@ def reload_knowledge() -> dict:
 @app.get("/", response_class=HTMLResponse)
 def dashboard() -> FileResponse:
     return FileResponse(DASHBOARD)
+
+
+# ---------------------------------------------------------------------------
+# CSV exports — flat, schema-pinned feeds for Power BI refresh
+# ---------------------------------------------------------------------------
+def _csv_response(text: str, filename: str) -> Response:
+    return Response(
+        content=text,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/api/export/runs.csv")
+def export_runs() -> Response:
+    return _csv_response(exports.runs_csv(storage.all("runs")), "aiops_runs.csv")
+
+
+@app.get("/api/export/approvals.csv")
+def export_approvals() -> Response:
+    return _csv_response(exports.reviews_csv(storage.all("reviews")),
+                         "aiops_approvals.csv")
+
+
+@app.get("/api/export/usage.csv")
+def export_usage() -> Response:
+    return _csv_response(exports.usage_csv(storage.all("usage")), "aiops_usage.csv")
 
 
 @app.get("/health")
