@@ -34,10 +34,14 @@ in one working system.
 | 7 | Integrations + audit log | ✅ | JSONL audit with correlation IDs |
 | 8 | FastAPI + operator dashboard | ✅ | dashboard serves, analytics populate |
 | 9 | n8n bridge + Docker Compose | ✅ | importable workflow JSON, `compose up` |
-| 10 | Tests + CI (3.11–3.13) | ✅ | 25/25 green in GitHub Actions |
+| 10 | Tests + CI (3.11–3.13) | ✅ | 46/46 green in GitHub Actions |
 | 11 | Postgres + pgvector behind `Storage` | ⬜ next | same interface, migration script |
 | 12 | Outbound n8n executor (outbox → real vendors) | ⬜ | dry-run replay mode |
 | 13 | Quality eval harness (labeled ticket set) | ✅ | `python -m scripts.eval_quality`: 8/8 routing accuracy, 100% escalation recall, CI `eval-quality` job |
+| 14 | Workflow designer (Analysis → importable n8n graph) | ✅ | `POST /api/workflows/design`, deterministic JSON, download endpoint |
+| 15 | Approval-queue SLA + run performance analytics | ✅ | `/api/analytics/approvals`, `/api/analytics/runs` with p50/p95, containment, aging |
+| 16 | Schema-pinned CSV exports for BI refresh | ✅ | `/api/export/{runs,approvals,usage}.csv`, columns pinned in CI |
+| 17 | Batch ingestion with per-item isolation | ✅ | `POST /api/tickets/batch` (≤100), aggregated summary |
 
 ## 3. Development roadmap (phases)
 
@@ -75,7 +79,7 @@ Phases 1–8 are complete; the roadmap items below extend the same skeleton.
 | Scope creep into "enterprise everything" | Non-goals above; one vertical (support tickets) done deeply |
 | Demo only works with API keys | Mock mode is the default; CI proves the whole pipeline offline |
 | Numbers look made up | ROI emits its assumptions next to every figure |
-| Human queue becomes a bottleneck | Escalation mix + latency tracked in analytics from day one |
+| Human queue becomes a bottleneck | Queue SLA endpoint tracks aging buckets, turnaround, and escalation rate from day one |
 
 ## 6. Definition of done (per feature)
 

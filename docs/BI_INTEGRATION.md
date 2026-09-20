@@ -8,11 +8,15 @@ table via **Get Data → Web** (or a scheduled dataflow pointing at the API).
 | Endpoint                   | Power BI table    | Dashboard visuals                     |
 |----------------------------|-------------------|----------------------------------------|
 | `/api/analytics/summary`   | `Summary`         | KPI cards: automation rate, pending approvals, LLM spend, est. monthly savings |
-| `/api/usage`               | `Usage`           | Cost by agent (bar), tokens over time (line), cost per ticket trend |
-| `/api/audit`               | `Audit`           | Event stream, escalations/day, approval turnaround |
+| `/api/analytics/runs`      | `RunPerf`         | Latency p50/p95 trend, containment vs human-touch, failure rate |
+| `/api/analytics/approvals` | `QueueSLA`        | Queue-aging buckets, oldest pending, human turnaround median, escalation rate |
+| `/api/export/runs.csv`     | `Runs` (flat)     | Disposition mix, latency distribution, cost per run — **recommended for scheduled refresh (schema pinned by tests)** |
+| `/api/export/approvals.csv`| `Approvals` (flat)| Reviewer workload, decision mix over time |
+| `/api/export/usage.csv`    | `Usage` (flat)    | Cost by agent, tokens over time, cost-per-ticket trend |
+| `/api/usage`               | `Usage` (JSON)    | Same data, ad-hoc exploration |
+| `/api/audit`               | `Audit`           | Event stream, escalations/day |
 | `/api/outbox`              | `Outbox`          | Executed actions by type, refund volume by day |
 | `/api/analyses`            | `Analyses`        | ROI per process, payback comparison, automation-score ranking |
-| `/api/runs` (via tickets)  | `Runs`            | Disposition mix, latency distribution, quality-gate failures |
 
 ## Suggested report pages
 
@@ -22,11 +26,13 @@ table via **Get Data → Web** (or a scheduled dataflow pointing at the API).
    quality-gate failure reasons, human edit rate. (Runs + Audit)
 3. **Cost & Tokens** — spend by agent, by model, trend by day; projected
    monthly spend at current volume. (Usage)
-4. **Operations** — pending review queue aging, escalation reasons, audit
-   stream. (Audit + Reviews)
+4. **Operations** — queue-aging buckets, human turnaround median, escalation
+   rate, containment rate. (Approvals + RunPerf + Audit)
 
 ## Refresh
 
-Point a scheduled refresh (or an n8n schedule → Power BI push) at
-`/api/analytics/summary` for near-real-time KPIs; the raw stores refresh on
-every request, so any cadence works.
+For scheduled refresh, prefer the **CSV exports** — their columns are
+pinned by `tests/test_exports.py`, so a breaking schema change fails CI
+before it can break a dashboard. `Get Data → Web` on
+`/api/export/runs.csv` (or a dataflow pointing at the API) refreshes on
+any cadence; the raw stores update on every request.

@@ -58,28 +58,55 @@ Demo fixture (no data setup needed):
 curl -X POST localhost:8000/api/tickets/demo
 ```
 
-## 4. The n8n bridge (inbound)
+## 4. The n8n bridge
+
+### 4.1 Inbound (prebuilt)
 
 `n8n/workflows/ticket_intake_bridge.json` imports a workflow that:
 
 1. Listens for inbound ticket events (email/webhook trigger — wire to your
    helpdesk export or inbox rules).
-2. POSTs each ticket to `POST /api/tickets` on the platform.
-3. Routes the response: `auto_resolved` → no-op; `human_approval` → Slack
-   notification with the review URL.
+2. POSTs each ticket to `POST /api/tickets` on the platform (or
+   `POST /api/tickets/batch` for fan-in of up to 100 items).
+3. Routes the response: `auto_resolved` → no-op; `human_review` → Slack
+   notification with the review ID.
 
 Import via n8n UI → *Workflows → Import from File*. Set the platform URL
 as an n8n variable (`AIOPS_URL`) so dev/prod can differ.
+
+### 4.2 Generated per process (workflow designer)
+
+The designer turns any stored Analysis into an importable workflow:
+
+```bash
+curl -X POST localhost:8000/api/workflows/design \
+  -H 'Content-Type: application/json' \
+  -d '{"process_id": "<from /api/analyses>"}'
+# then: GET /api/workflows/{workflow_id}/download  -> n8n → Import from File
+```
+
+The generated graph mirrors the governance model — intake webhook →
+agentic pipeline → IF disposition = `human_review` (Slack escalation) else
+reply, plus an hourly monitoring digest and a sticky note carrying the
+per-step AI mapping. Generation is deterministic (no LLM), so the artifact
+is reviewable in a PR like any other integration change.
 
 ## 5. Monitoring feeds (Power BI / any BI)
 
 | Endpoint | Grain | Typical visual |
 |---|---|---|
 | `GET /api/analytics/summary` | aggregates: automation rate, cost by agent, disposition mix, latency | KPI cards |
-| `GET /api/runs` | one row per run: disposition, cost, tokens, latency, category | trend lines, slicers |
+| `GET /api/analytics/runs` | per-run performance: latency p50/p95, failure, containment, human-touch, cost/run | service-level trend lines |
+| `GET /api/analytics/approvals` | queue SLA: aging buckets, oldest pending, human turnaround, escalation rate | queue-aging bars, reviewer workload |
+| `GET /api/export/runs.csv` | flat, schema-pinned CSV of runs | Power BI scheduled refresh |
+| `GET /api/export/approvals.csv` | flat CSV of review decisions | Power BI scheduled refresh |
+| `GET /api/export/usage.csv` | flat CSV of per-call LLM usage | cost attribution |
+| `GET /api/runs` | one row per run: disposition, cost, tokens, latency, category | ad-hoc JSON exploration |
 | `GET /api/reviews` | queue state + decisions | reviewer workload |
 
-`BI_INTEGRATION.md` has field-level schema and a sample M query.
+`BI_INTEGRATION.md` has field-level schema and a sample M query. The CSV
+schemas are pinned by tests (`tests/test_exports.py`) — a breaking column
+change fails CI instead of silently breaking a scheduled refresh.
 
 ## 6. Troubleshooting
 
