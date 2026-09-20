@@ -30,6 +30,10 @@ OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 CHAT_MODEL = os.getenv("AIOPS_CHAT_MODEL", "gpt-4o-mini")
 EMBED_MODEL = os.getenv("AIOPS_EMBED_MODEL", "text-embedding-3-small")
 
+# Public base URL n8n (or any external system) uses to reach this API.
+# In docker-compose, n8n reaches the API by service name.
+API_BASE_URL = os.getenv("AIOPS_API_BASE_URL", "http://api:8000")
+
 # ---------------------------------------------------------------------------
 # Governance thresholds — the heart of the human-in-the-loop story.
 # Env-overridable so ops can tune per deployment without a code change.

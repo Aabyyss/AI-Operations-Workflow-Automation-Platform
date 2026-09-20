@@ -226,6 +226,12 @@ class ReviewDecision(BaseModel):
     note: str | None = None
 
 
+class WorkflowDesignRequest(BaseModel):
+    """Ask the workflow designer to emit an n8n import for a stored analysis."""
+    process_id: str
+    workflow_name: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Cost / monitoring
 # ---------------------------------------------------------------------------

@@ -27,6 +27,7 @@ class Storage:
             "usage": config.DATA_DIR / "usage.json",
             "audit": config.DATA_DIR / "audit.json",
             "outbox": config.DATA_DIR / "outbox.json",
+            "workflows": config.DATA_DIR / "workflows.json",
         }
 
     def _load(self, name: str) -> list[dict[str, Any]]:

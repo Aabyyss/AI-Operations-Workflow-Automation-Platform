@@ -11,11 +11,12 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 
-from . import config, pipeline, store
+from . import config, designer, pipeline, store
 from .analyzer import analyze_process
 from .integrations import actions as integ
 from .integrations.audit import audit_log
-from .models import PipelineResult, ProcessInput, ReviewDecision, Ticket, iso_now
+from .models import (PipelineResult, ProcessInput, ReviewDecision, Ticket,
+                     WorkflowDesignRequest, iso_now)
 from .rag import retriever
 from .store import storage
 
@@ -49,6 +50,42 @@ def analyze(p: ProcessInput) -> dict:
 @app.get("/api/analyses")
 def list_analyses() -> list[dict]:
     return storage.all("analyses")
+
+
+# ---------------------------------------------------------------------------
+# Workflow designer — Analysis → importable n8n workflow
+# ---------------------------------------------------------------------------
+@app.post("/api/workflows/design")
+def design(req: WorkflowDesignRequest) -> dict:
+    # Analyses are keyed by process_id, not id — match explicitly.
+    analysis = next((a for a in storage.all("analyses")
+                     if a.get("process_id") == req.process_id), None)
+    if not analysis:
+        raise HTTPException(404, "analysis not found — POST /api/analyze first")
+    design_record = designer.design_from_request(analysis, req,
+                                                 base_url=config.API_BASE_URL)
+    storage.append("workflows", {k: v for k, v in design_record.items()
+                                 if k != "workflow"})
+    audit_log("workflow_designed", {"process_id": req.process_id,
+                                    "workflow_id": design_record["id"],
+                                    "nodes": design_record["node_count"]})
+    return design_record
+
+
+@app.get("/api/workflows")
+def list_workflows() -> list[dict]:
+    return storage.all("workflows")
+
+
+@app.get("/api/workflows/{workflow_id}/download")
+def download_workflow(workflow_id: str):
+    """The JSON to save as a file and import via n8n → Import from File."""
+    record = storage.get("workflows", workflow_id)
+    if not record:
+        raise HTTPException(404, "workflow not found")
+    analysis = storage.get("analyses", record["process_id"]) or {"process_id": record["process_id"]}
+    full = designer.design_workflow(analysis, name=record["name"])
+    return full["workflow"]
 
 
 # ---------------------------------------------------------------------------
