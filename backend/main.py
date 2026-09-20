@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from . import config, designer, pipeline, store
 from .analytics import approval_sla_metrics
 from .analyzer import analyze_process
+from .run_metrics import run_performance_metrics
 from .integrations import actions as integ
 from .integrations.audit import audit_log
 from .models import (PipelineResult, ProcessInput, ReviewDecision, Ticket,
@@ -204,6 +205,12 @@ def approval_sla() -> dict:
     reviews = storage.all("reviews")
     runs_count = len(storage.all("runs"))
     return approval_sla_metrics(reviews, runs_count, datetime.now(timezone.utc))
+
+
+@app.get("/api/analytics/runs")
+def run_analytics() -> dict:
+    """Pipeline performance: latency percentiles, failure/containment, cost."""
+    return run_performance_metrics(storage.all("runs"))
 
 
 @app.get("/api/usage")

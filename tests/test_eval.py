@@ -17,6 +17,11 @@ def test_eval_main_passes_and_is_isolated():
     # The autouse conftest fixture points config.DATA_DIR at tmp_path/data.
     # The harness must rebind it to its own temp dir, and clean up after.
     fixture_dir = config.DATA_DIR
+    from backend import store
+    store_before = store.storage
     assert main() == 0
     assert config.DATA_DIR != fixture_dir
     assert not config.DATA_DIR.exists()  # harness removed its temp dir
+    # The harness must restore the store singleton it rebound during eval —
+    # otherwise every test running after it reads a split-brain store.
+    assert store.storage is store_before

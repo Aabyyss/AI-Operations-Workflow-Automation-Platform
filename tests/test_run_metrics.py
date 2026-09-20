@@ -1,0 +1,55 @@
+"""Tests for run performance metrics (percentiles, failure, containment)."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from backend.run_metrics import percentile, run_performance_metrics  # noqa: E402
+
+
+def test_percentile_matches_linear_interpolation():
+    vals = [10, 20, 30, 40]
+    assert percentile(vals, 50) == 25.0
+    assert percentile(vals, 0) == 10.0
+    assert percentile(vals, 100) == 40.0
+    assert percentile([], 95) == 0.0
+    assert percentile([5], 95) == 5.0
+
+
+def _run(disp: str, ms: float, cost: float) -> dict:
+    return {"disposition": disp, "total_latency_ms": ms, "total_cost_usd": cost}
+
+
+def test_metrics_math():
+    runs = [
+        _run("auto_resolved", 100, 0.0002),
+        _run("auto_resolved", 200, 0.0003),
+        _run("human_review", 300, 0.0004),
+        _run("approved_executed", 400, 0.0005),
+        _run("failed", 50, 0.0001),
+    ]
+    m = run_performance_metrics(runs)
+    assert m["runs"] == 5
+    assert m["latency_ms"]["p50"] == 200.0
+    assert m["latency_ms"]["p95"] == 380.0
+    assert m["latency_ms"]["max"] == 400.0
+    assert m["failure_rate_pct"] == 20.0
+    assert m["containment_rate_pct"] == 40.0   # 2 auto / 5
+    assert m["human_touch_rate_pct"] == 40.0   # human_review + approved_executed
+    assert m["cost_per_run_usd"]["mean"] == 0.0003
+
+
+def test_zero_state():
+    m = run_performance_metrics([])
+    assert m["runs"] == 0
+    assert m["latency_ms"]["p95"] == 0.0
+    assert m["failure_rate_pct"] == 0.0
+
+
+def test_endpoint_on_live_data(client):
+    client.post("/api/tickets/demo")
+    m = client.get("/api/analytics/runs").json()
+    assert m["runs"] == 1
+    assert m["containment_rate_pct"] == 100.0
+    assert m["failure_rate_pct"] == 0.0
+    assert m["latency_ms"]["p50"] > 0

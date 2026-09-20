@@ -91,6 +91,9 @@ EVAL_SET: list[dict] = [
 ]
 
 
+_ORIGINALS: dict = {}
+
+
 def _isolate_data_dir() -> None:
     """Point config.DATA_DIR at a fresh temp dir and rebuild storage.
 
@@ -99,10 +102,22 @@ def _isolate_data_dir() -> None:
     tmp = Path(tempfile.mkdtemp(prefix="aiops-eval-"))
     config.DATA_DIR = tmp
     from backend import store
+    _ORIGINALS.update(storage=store.storage, append=store.append, all=store.all)
     store.storage = store.Storage()          # rebind the singleton
     import backend.store as store_mod
     store_mod.append = store.storage.append  # keep module helpers aligned
     store_mod.all = store.storage.all
+
+
+def _restore_data_dir() -> None:
+    """Restore pre-eval store bindings — the harness must stay side-effect
+    free even when main() runs inside another process's test suite."""
+    if not _ORIGINALS:
+        return
+    from backend import store
+    store.storage = _ORIGINALS["storage"]
+    store.append = _ORIGINALS["append"]
+    store.all = _ORIGINALS["all"]
 
 
 def run_eval() -> tuple[int, int, list[dict]]:
@@ -168,6 +183,7 @@ def main() -> int:
         correct, total, results = run_eval()
         report(correct, total, results)
     finally:
+        _restore_data_dir()
         shutil.rmtree(config.DATA_DIR, ignore_errors=True)  # no temp litter
     ok = correct == total
     print(f"\n{'PASS' if ok else 'FAIL'}: {'all cases match governance labels' if ok else 'routing diverged from labels — do not ship'}")
