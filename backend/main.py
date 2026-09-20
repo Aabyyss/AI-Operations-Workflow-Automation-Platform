@@ -10,6 +10,7 @@ from pathlib import Path
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, Response
+from pydantic import BaseModel
 
 from . import config, designer, exports, pipeline, store
 from .analytics import approval_sla_metrics
@@ -97,6 +98,47 @@ def download_workflow(workflow_id: str):
 def submit_ticket(ticket: Ticket) -> PipelineResult:
     result = pipeline.run_pipeline(ticket)
     return result
+
+
+BATCH_MAX = 100
+
+
+class TicketBatch(BaseModel):
+    tickets: list[Ticket]
+
+
+@app.post("/api/tickets/batch")
+def submit_batch(batch: TicketBatch) -> dict:
+    """Process many tickets in one request (n8n fan-in, email exports).
+
+    Per-item results are preserved: one bad ticket never blocks the rest.
+    """
+    if not batch.tickets:
+        raise HTTPException(422, "tickets must not be empty")
+    if len(batch.tickets) > BATCH_MAX:
+        raise HTTPException(422, f"batch limited to {BATCH_MAX} tickets")
+
+    results: list[PipelineResult] = []
+    for t in batch.tickets:
+        try:
+            results.append(pipeline.run_pipeline(t))
+        except Exception as exc:  # noqa: BLE001 — isolate per item
+            results.append(PipelineResult(ticket_id=t.id,
+                                          disposition="failed",
+                                          error=str(exc)))
+
+    dispositions = [r.disposition.value for r in results]
+    summary = {
+        "submitted": len(results),
+        "auto_resolved": dispositions.count("auto_resolved"),
+        "human_review": dispositions.count("human_review"),
+        "failed": dispositions.count("failed"),
+        "total_cost_usd": round(sum(r.total_cost_usd for r in results), 5),
+        "total_latency_ms": sum(r.total_latency_ms for r in results),
+    }
+    audit_log("batch_submitted", {"size": len(results), **summary})
+    return {"summary": summary,
+            "results": [r.model_dump() for r in results]}
 
 
 @app.get("/api/tickets")
