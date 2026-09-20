@@ -90,6 +90,7 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
         <button onclick="analyze()">Analyze ROI</button>
       </div>
       <div id="analysis_out" style="margin-top:12px"></div>
+      <div id="design_out" style="margin-top:10px"></div>
     </div>
 
     <!-- Side B: live pipeline -->
@@ -133,6 +134,16 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
     <h2>Recent Ticket Runs</h2>
     <div id="runs_out" class="muted">No runs yet.</div>
   </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>Power BI Feeds · schema-pinned CSV</h2>
+    <div class="muted" style="margin-bottom:8px">Scheduled refresh in Power BI is just a GET on these flat files:</div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap">
+      <a href="/api/export/runs.csv" class="pill pending" style="text-decoration:none">runs.csv</a>
+      <a href="/api/export/approvals.csv" class="pill pending" style="text-decoration:none">approvals.csv</a>
+      <a href="/api/export/usage.csv" class="pill pending" style="text-decoration:none">usage.csv</a>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -148,14 +159,16 @@ async function api(path, opts) {
 
 async function loadAll() {
   try {
-    const [summary, reviews, usage, audit, runs] = await Promise.all([
+    const [summary, reviews, usage, audit, runs, sla, perf] = await Promise.all([
       api("/api/analytics/summary"),
       api("/api/reviews"),
       api("/api/usage"),
       api("/api/audit?limit=12"),
       api("/api/tickets"),
+      api("/api/analytics/approvals"),
+      api("/api/analytics/runs"),
     ]);
-    renderKpis(summary);
+    renderKpis(summary, sla, perf);
     renderCosts(usage);
     renderDispositions(summary);
     renderReviews(reviews);
@@ -164,14 +177,16 @@ async function loadAll() {
   } catch (e) { console.error(e); }
 }
 
-function renderKpis(s) {
+function renderKpis(s, sla, perf) {
   const k = [
     ["Tickets processed", s.tickets_processed, ""],
+    ["Containment rate", perf.containment_rate_pct, "% no human touched"],
     ["Automation rate", s.automation_rate_pct, "%"],
-    ["Pending approvals", s.pending_reviews, ""],
+    ["Pending approvals", sla.pending, `· oldest ${sla.oldest_pending_minutes}m`],
+    ["Escalation rate", sla.escalation_rate_pct, "%"],
+    ["p95 latency", perf.latency_ms.p95, "ms"],
     ["LLM spend", "$" + (s.total_llm_cost_usd||0).toFixed(4), ""],
     ["Est. monthly savings", money(s.estimated_monthly_savings_usd||0), ""],
-    ["Avg latency", s.avg_pipeline_latency_ms, "ms"],
   ];
   $("kpis").innerHTML = k.map(([l,v,u]) =>
     `<div class="card"><div class="muted">${l}</div><div class="kpi">${esc(v)}<small>${u}</small></div></div>`).join("");
@@ -250,9 +265,21 @@ async function analyze() {
         <tr><td>First-year ROI</td><td><b>${c.first_year_roi_pct}%</b></td></tr>
         <tr><td>Automation rate</td><td>${c.automation_rate_pct}% of volume</td></tr>
       </table>
-      <div class="muted" style="margin-top:6px">Step mapping: ${a.ai_mapping.map(m=>`${esc(m.step)} → ${esc(m.recommendation)}`).join(" · ")}</div>`;
+      <div class="muted" style="margin-top:6px">Step mapping: ${a.ai_mapping.map(m=>`${esc(m.step)} → ${esc(m.recommendation)}`).join(" · ")}</div>
+      <div style="margin-top:10px"><button class="ghost" onclick="designWorkflow('${a.process_id}')">Design n8n workflow →</button></div>`;
   } catch(e) { $("analysis_out").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
 }
+
+async function designWorkflow(processId) {
+  $("design_out").innerHTML = '<span class="muted">Generating workflow…</span>';
+  try {
+    const d = await api("/api/workflows/design", {method:"POST", body:JSON.stringify({process_id: processId})});
+    $("design_out").innerHTML = `
+      <div class="pill auto">n8n workflow ready</div>
+      <b> ${esc(d.name)}</b>
+      <div class="muted" style="margin-top:4px">${d.node_count} nodes · intake webhook → agentic pipeline → risk-gated escalation, hourly monitoring digest, AI-mapping note embedded.</div>
+      <div style="margin-top:8px"><a href="/api/workflows/${d.id}/download" download="workflow.json"><button class="ghost">Download JSON for n8n import</button></a></div>`;
+  } catch(e) { $("design_out").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
 
 async function submitTicket() {
   $("ticket_out").innerHTML = '<span class="muted">Running pipeline…</span>';
