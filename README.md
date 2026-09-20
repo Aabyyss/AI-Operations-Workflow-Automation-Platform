@@ -9,7 +9,7 @@ An AI-powered platform that answers the questions businesses actually ask:
 Two sides in one system — **AI Product Management** (business case) and
 **AI Integration** (working pipeline + integrations).
 
-[![CI](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml) ![dispositions](https://img.shields.io/badge/tests-28%2F28-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue) ![eval](https://img.shields.io/badge/eval-8%2F8%20routing%20accuracy-brightgreen)
+[![CI](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml) ![dispositions](https://img.shields.io/badge/tests-46%2F46-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue) ![eval](https://img.shields.io/badge/eval-8%2F8%20routing%20accuracy-brightgreen) ![version](https://img.shields.io/badge/version-1.1.0-blue)
 
 ---
 
@@ -98,6 +98,7 @@ docker compose up --build    # API on :8000, n8n on :5678
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module walkthrough with request traces |
 | [docs/BI_INTEGRATION.md](docs/BI_INTEGRATION.md) | Power BI / analytics feed endpoints and schema |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Day-2: config, storage, troubleshooting, backup |
+| [CHANGELOG.md](CHANGELOG.md) | Release history — what shipped when and why |
 
 ## Roadmap
 
