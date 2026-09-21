@@ -47,9 +47,26 @@ def test_zero_state():
 
 
 def test_endpoint_on_live_data(client):
-    client.post("/api/tickets/demo")
+    """Seeded, deterministic record — CI machines run the mock pipeline in
+    under 0.05 ms, so asserting on measured wall-clock latency is flaky."""
+    from backend.models import PipelineResult
+    from backend.store import storage
+
+    rec = PipelineResult(ticket_id="t_ci", disposition="auto_resolved",
+                         total_cost_usd=0.0002, total_latency_ms=12.5).model_dump()
+    storage.append("runs", rec)
     m = client.get("/api/analytics/runs").json()
     assert m["runs"] == 1
     assert m["containment_rate_pct"] == 100.0
     assert m["failure_rate_pct"] == 0.0
-    assert m["latency_ms"]["p50"] > 0
+    assert m["latency_ms"]["p50"] == 12.5
+    assert m["latency_ms"]["max"] == 12.5
+    assert m["cost_per_run_usd"]["mean"] == 0.0002
+
+
+def test_sub_millisecond_latency_is_preserved():
+    """Regression pin: rounding must not collapse fast runs to 0.0 ms
+    (this exact collapse broke the 3.11 CI job)."""
+    m = run_performance_metrics([_run("auto_resolved", 0.012, 0.0002)])
+    assert m["latency_ms"]["p50"] == 0.012
+    assert m["latency_ms"]["p95"] == 0.012

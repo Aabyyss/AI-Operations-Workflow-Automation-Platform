@@ -37,7 +37,7 @@ def _trace(agent: str, t0: float, inp: str, out: str, usage: Any = None) -> Agen
     if usage is not None:
         tr.tokens_in, tr.tokens_out = usage.tokens_in, usage.tokens_out
         tr.cost_usd, tr.mode = usage.cost_usd, usage.mode
-    tr.duration_ms = int((time.time() - t0) * 1000)
+    tr.duration_ms = round((time.perf_counter() - t0) * 1000, 3)
     return tr
 
 
@@ -45,7 +45,7 @@ def _trace(agent: str, t0: float, inp: str, out: str, usage: Any = None) -> Agen
 # Agent 1 — Intake
 # ---------------------------------------------------------------------------
 def run_intake(ticket: Ticket, trace: list[AgentTrace], usage_log: list) -> IntakeResult:
-    t0 = time.time()
+    t0 = time.perf_counter()
     llm = get_llm()
     prompt = (
         f"TICKET_SUBJECT:{ticket.subject}\nTICKET_BODY:{ticket.body}\n"
@@ -73,7 +73,7 @@ def run_intake(ticket: Ticket, trace: list[AgentTrace], usage_log: list) -> Inta
 # Agent 2 — Knowledge (RAG)
 # ---------------------------------------------------------------------------
 def run_knowledge(intake: IntakeResult, ticket: Ticket, trace: list[AgentTrace]) -> KnowledgeResult:
-    t0 = time.time()
+    t0 = time.perf_counter()
     query = f"{ticket.subject} {ticket.body[:300]}"
     chunks = retriever.retrieve(query, k=4)
     good = [c for c in chunks if c.score >= config.MIN_RETRIEVAL_SCORE]
@@ -103,7 +103,7 @@ def run_knowledge(intake: IntakeResult, ticket: Ticket, trace: list[AgentTrace])
 # ---------------------------------------------------------------------------
 def run_decision(intake: IntakeResult, knowledge: KnowledgeResult, ticket: Ticket,
                  trace: list[AgentTrace]) -> DecisionResult:
-    t0 = time.time()
+    t0 = time.perf_counter()
     risk = 0.05
     reasons: list[str] = []
     actions: list[str] = []
@@ -171,7 +171,7 @@ def run_decision(intake: IntakeResult, knowledge: KnowledgeResult, ticket: Ticke
 # ---------------------------------------------------------------------------
 def run_draft(ticket: Ticket, intake: IntakeResult, knowledge: KnowledgeResult,
               trace: list[AgentTrace], usage_log: list) -> DraftResponse:
-    t0 = time.time()
+    t0 = time.perf_counter()
     llm = get_llm()
     policy = knowledge.chunks[0].text if knowledge.chunks else ""
     prompt = (
@@ -200,7 +200,7 @@ def run_draft(ticket: Ticket, intake: IntakeResult, knowledge: KnowledgeResult,
 # ---------------------------------------------------------------------------
 def run_quality(draft: DraftResponse, knowledge: KnowledgeResult, ticket: Ticket,
                 trace: list[AgentTrace], usage_log: list) -> QualityResult:
-    t0 = time.time()
+    t0 = time.perf_counter()
     llm = get_llm()
     grounded = bool(draft.grounded_in) and knowledge.sufficient
     prompt = (
@@ -233,7 +233,7 @@ def run_quality(draft: DraftResponse, knowledge: KnowledgeResult, ticket: Ticket
 def run_actions(ticket: Ticket, intake: IntakeResult, decision: DecisionResult,
                 response_text: str, trace: list[AgentTrace]) -> list[str]:
     from .integrations import actions as integ
-    t0 = time.time()
+    t0 = time.perf_counter()
     taken: list[str] = []
     for action in decision.proposed_actions:
         if action.startswith("queue_refund:"):
@@ -258,7 +258,7 @@ def run_actions(ticket: Ticket, intake: IntakeResult, decision: DecisionResult,
 # ---------------------------------------------------------------------------
 def run_escalation(ticket: Ticket, decision: DecisionResult, draft: DraftResponse,
                    trace: list[AgentTrace]) -> ReviewRequest:
-    t0 = time.time()
+    t0 = time.perf_counter()
     review = ReviewRequest(
         ticket_id=ticket.id,
         risk_score=decision.risk_score,
@@ -316,7 +316,7 @@ def run_pipeline(ticket: Ticket) -> PipelineResult:
 
     result.trace = trace
     result.total_cost_usd = round(sum(u.cost_usd for u in usage_log), 6)
-    result.total_latency_ms = sum(t.duration_ms for t in trace)
+    result.total_latency_ms = round(sum(t.duration_ms for t in trace), 3)
     for u in usage_log:
         store.append("usage", u.model_dump())
     store.append("runs", result.model_dump())

@@ -289,7 +289,7 @@ def analytics_summary() -> dict:
         100.0 * dispositions.get("auto_resolved", 0)
         / max(1, sum(dispositions.values()))
     )
-    avg_latency = float(runs["total_latency_ms"].mean().round(1)) if not runs.empty else 0.0
+    avg_latency = float(runs["total_latency_ms"].mean().round(3)) if not runs.empty else 0.0
     pending_reviews = sum(1 for r in reviews if r.get("status") == "pending")
 
     latest_roi = analyses[-1]["costs"] if analyses else None

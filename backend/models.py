@@ -176,8 +176,8 @@ class QualityResult(BaseModel):
 class AgentTrace(BaseModel):
     """One hop in the pipeline — kept for auditability and monitoring."""
     agent: str
-    started_at: float = Field(default_factory=time.time)
-    duration_ms: int = 0
+    started_at: float = Field(default_factory=time.time)  # wall clock, for audit
+    duration_ms: float = 0.0  # perf_counter-based; sub-ms precision so fast runs never truncate to 0
     input_summary: str = ""
     output_summary: str = ""
     tokens_in: int = 0
@@ -200,7 +200,7 @@ class PipelineResult(BaseModel):
     review_id: str | None = None
     trace: list[AgentTrace] = Field(default_factory=list)
     total_cost_usd: float = 0.0
-    total_latency_ms: int = 0
+    total_latency_ms: float = 0.0
     error: str | None = None
 
 

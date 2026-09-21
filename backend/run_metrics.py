@@ -46,10 +46,10 @@ def run_performance_metrics(runs: list[dict]) -> dict:
     return {
         "runs": total,
         "latency_ms": {
-            "p50": round(percentile(latencies, 50), 1),
-            "p95": round(percentile(latencies, 95), 1),
-            "max": round(max(latencies), 1) if latencies else 0.0,
-            "mean": round(sum(latencies) / len(latencies), 1) if latencies else 0.0,
+            "p50": round(percentile(latencies, 50), 3),
+            "p95": round(percentile(latencies, 95), 3),
+            "max": round(max(latencies), 3) if latencies else 0.0,
+            "mean": round(sum(latencies) / len(latencies), 3) if latencies else 0.0,
         },
         "failure_rate_pct": round(100.0 * failures / max(1, total), 1),
         "containment_rate_pct": round(100.0 * auto / max(1, total), 1),
