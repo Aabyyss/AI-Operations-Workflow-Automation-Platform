@@ -34,6 +34,13 @@ EMBED_MODEL = os.getenv("AIOPS_EMBED_MODEL", "text-embedding-3-small")
 # In docker-compose, n8n reaches the API by service name.
 API_BASE_URL = os.getenv("AIOPS_API_BASE_URL", "http://api:8000")
 
+# Security: when set, every API request must present this key (X-API-Key or
+# Authorization: Bearer). Unset = open API, the right default for local dev.
+API_KEY = os.getenv("AIOPS_API_KEY", "")
+# Shared secret used to verify HMAC-SHA256 signatures on the n8n intake
+# webhook. Unset = signatures are accepted but not enforced.
+WEBHOOK_SECRET = os.getenv("AIOPS_WEBHOOK_SECRET", "")
+
 # ---------------------------------------------------------------------------
 # Governance thresholds — the heart of the human-in-the-loop story.
 # Env-overridable so ops can tune per deployment without a code change.

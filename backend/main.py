@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel
 
-from . import config, designer, exports, pipeline, store
+from . import config, designer, exports, pipeline, security, store
 from .analytics import approval_sla_metrics
 from .analyzer import analyze_process
 from .run_metrics import run_performance_metrics
@@ -32,6 +32,8 @@ app = FastAPI(
     ),
     version="0.1.0",
 )
+
+security.install_auth(app)
 
 DASHBOARD = Path(__file__).resolve().parent.parent / "dashboard" / "index.html"
 
