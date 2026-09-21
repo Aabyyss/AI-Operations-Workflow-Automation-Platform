@@ -40,6 +40,8 @@ API_KEY = os.getenv("AIOPS_API_KEY", "")
 # Shared secret used to verify HMAC-SHA256 signatures on the n8n intake
 # webhook. Unset = signatures are accepted but not enforced.
 WEBHOOK_SECRET = os.getenv("AIOPS_WEBHOOK_SECRET", "")
+# Max age of a signed webhook payload (replay window).
+WEBHOOK_MAX_SKEW_S = int(os.getenv("AIOPS_WEBHOOK_MAX_SKEW_S", "300"))
 
 # ---------------------------------------------------------------------------
 # Governance thresholds — the heart of the human-in-the-loop story.

@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel
 
@@ -100,6 +100,29 @@ def download_workflow(workflow_id: str):
 def submit_ticket(ticket: Ticket) -> PipelineResult:
     result = pipeline.run_pipeline(ticket)
     return result
+
+
+@app.post("/api/webhooks/tickets")
+async def submit_signed_ticket(request: Request) -> dict:
+    """Signed ticket intake — the endpoint the n8n bridge should target.
+
+    Body: a single Ticket JSON. When AIOPS_WEBHOOK_SECRET is set the request
+    must carry X-AIOPS-Signature: sha256=<ts>.<hmac> over the raw bytes
+    (see backend/webhook.py); unset = accepted unsigned.
+    """
+    from .models import Ticket as TicketModel
+    from .webhook import WebhookAuthError, read_signed_body
+
+    try:
+        body = await read_signed_body(request)
+    except WebhookAuthError as exc:
+        audit_log("webhook_rejected", {"reason": str(exc),
+                                       "ip": request.client.host if request.client else ""})
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    ticket = TicketModel.model_validate_json(body)
+    result = pipeline.run_pipeline(ticket)
+    return result.model_dump()
 
 
 BATCH_MAX = 100
