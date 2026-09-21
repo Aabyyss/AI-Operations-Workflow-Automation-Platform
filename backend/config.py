@@ -43,6 +43,11 @@ WEBHOOK_SECRET = os.getenv("AIOPS_WEBHOOK_SECRET", "")
 # Max age of a signed webhook payload (replay window).
 WEBHOOK_MAX_SKEW_S = int(os.getenv("AIOPS_WEBHOOK_MAX_SKEW_S", "300"))
 
+# Rate limiting: requests per client IP per sliding window. 0 = disabled
+# (default - a single-tenant deployment rarely needs it).
+RATE_LIMIT = int(os.getenv("AIOPS_RATE_LIMIT", "0"))
+RATE_LIMIT_WINDOW_S = int(os.getenv("AIOPS_RATE_LIMIT_WINDOW_S", "60"))
+
 # ---------------------------------------------------------------------------
 # Governance thresholds — the heart of the human-in-the-loop story.
 # Env-overridable so ops can tune per deployment without a code change.
