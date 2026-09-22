@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from . import config, designer, exports, pipeline, ratelimit, reqlog, security, store
@@ -379,3 +379,36 @@ def export_usage() -> Response:
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "mode": config.MODE}
+
+
+def _ready_body() -> dict:
+    """Pure readiness checks — no HTTP concerns."""
+    checks: dict = {}
+
+    probe = config.DATA_DIR / ".readiness_probe"
+    try:
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        checks["storage_writable"] = True
+    except OSError:
+        checks["storage_writable"] = False
+
+    checks["knowledge_chunks"] = len(retriever.index.docs)
+
+    ok = checks["storage_writable"] and checks["knowledge_chunks"] > 0
+    return {"status": "ready" if ok else "not_ready",
+            "mode": config.MODE, "checks": checks}
+
+
+@app.get("/ready")
+def ready() -> dict:
+    """Readiness probe: process is up AND its dependencies actually work.
+
+    /health answers 'can I accept connections?' (liveness);
+    /ready answers 'should traffic be routed to me?' (readiness).
+    A deployment whose knowledge corpus failed to load or whose data
+    directory is read-only is alive but not ready.
+    """
+    body = _ready_body()
+    return body if body["status"] == "ready" else JSONResponse(
+        status_code=503, content=body)

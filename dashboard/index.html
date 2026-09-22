@@ -152,10 +152,17 @@ const money = (v) => "$" + Number(v).toLocaleString(undefined,{maximumFractionDi
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 async function api(path, opts) {
-  const r = await fetch(path, opts ? {headers:{"Content-Type":"application/json"}, ...opts} : undefined);
+  const headers = {"Content-Type": "application/json"};
+  const key = window.localStorage.getItem("aiops_api_key");
+  if (key) headers["X-API-Key"] = key;
+  const r = await fetch(path, opts ? {headers, ...opts} : {headers});
   if (!r.ok) throw new Error((await r.json().catch(()=>({detail:r.statusText}))).detail || r.statusText);
   return r.json();
 }
+
+// Set once from the console (or a bookmarklet) when the API runs with
+// AIOPS_API_KEY:  localStorage.setItem("aiops_api_key", "<key>")
+window.setApiKey = (k) => { localStorage.setItem("aiops_api_key", k); location.reload(); };
 
 async function loadAll() {
   try {
