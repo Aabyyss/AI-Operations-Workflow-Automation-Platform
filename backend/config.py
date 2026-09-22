@@ -48,6 +48,10 @@ WEBHOOK_MAX_SKEW_S = int(os.getenv("AIOPS_WEBHOOK_MAX_SKEW_S", "300"))
 RATE_LIMIT = int(os.getenv("AIOPS_RATE_LIMIT", "0"))
 RATE_LIMIT_WINDOW_S = int(os.getenv("AIOPS_RATE_LIMIT_WINDOW_S", "60"))
 
+# Request logging: "plain" (uvicorn default) or "json" (structured,
+# one JSON object per request on stdout - for shippers and SIEMs).
+LOG_FORMAT = os.getenv("AIOPS_LOG_FORMAT", "plain")
+
 # ---------------------------------------------------------------------------
 # Governance thresholds — the heart of the human-in-the-loop story.
 # Env-overridable so ops can tune per deployment without a code change.
