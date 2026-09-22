@@ -8,14 +8,22 @@ services:
       - AIOPS_MODE=${AIOPS_MODE:-mock}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - AIOPS_CHAT_MODEL=${AIOPS_CHAT_MODEL:-gpt-4o-mini}
+      # ---- security (all off by default) ----
+      - AIOPS_API_KEY=${AIOPS_API_KEY:-}
+      - AIOPS_WEBHOOK_SECRET=${AIOPS_WEBHOOK_SECRET:-}
+      - AIOPS_RATE_LIMIT=${AIOPS_RATE_LIMIT:-0}
+      # ---- observability ----
+      - AIOPS_REQUEST_LOG_FILE=${AIOPS_REQUEST_LOG_FILE:-}
     volumes:
       - ./data:/app/data
       - ./knowledge_base:/app/knowledge_base
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 3s
       retries: 3
+      start_period: 10s
 
   n8n:
     image: docker.n8n.io/n8nio/n8n
