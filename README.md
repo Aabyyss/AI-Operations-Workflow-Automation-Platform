@@ -9,7 +9,7 @@ An AI-powered platform that answers the questions businesses actually ask:
 Two sides in one system — **AI Product Management** (business case) and
 **AI Integration** (working pipeline + integrations).
 
-[![CI](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml) ![dispositions](https://img.shields.io/badge/tests-46%2F46-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue) ![eval](https://img.shields.io/badge/eval-8%2F8%20routing%20accuracy-brightgreen) ![version](https://img.shields.io/badge/version-1.1.0-blue)
+[![CI](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml) ![dispositions](https://img.shields.io/badge/tests-81%2F81-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue) ![eval](https://img.shields.io/badge/eval-8%2F8%20routing%20accuracy-brightgreen) ![security](https://img.shields.io/badge/security-auth%20·%20HMAC%20·%20rate%20limit%20%28opt%2Din%29-blue) ![version](https://img.shields.io/badge/version-1.2.0-blue)
 
 ---
 
@@ -87,6 +87,11 @@ curl localhost:8000/api/analytics/summary                # Power BI feed
 ```bash
 docker compose up --build    # API on :8000, n8n on :5678
 ```
+
+For shared deployments, set the opt-in protections from `.env.example`:
+`AIOPS_API_KEY` (API auth), `AIOPS_WEBHOOK_SECRET` (signed n8n intake),
+`AIOPS_RATE_LIMIT` (per-IP limiter), `AIOPS_REQUEST_LOG_FILE` (structured
+logs). Backups: `python -m scripts.backup --retention 14`.
 
 ## Documentation
 

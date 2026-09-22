@@ -1,62 +1,74 @@
 # Changelog
 
 All notable changes to this project are documented here.
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
+versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] — 2026-09-21
+## [Unreleased]
+
+## [v1.2.0] — 2026-09-22 — production hardening
+
+Everything in this release is opt-in: the platform still runs offline in
+mock mode with zero configuration. Each feature exists because a real
+deployment would be asked for it before go-live.
 
 ### Added
-- **Workflow designer** — `POST /api/workflows/design` turns any stored
-  process Analysis into an importable n8n workflow (intake webhook →
-  agentic pipeline → risk-gated Slack escalation or reply, hourly
-  monitoring digest, AI-mapping sticky note). Deterministic generation;
-  `GET /api/workflows/{id}/download` returns the JSON for n8n's
-  *Import from File*. This is the bridge from Side A ("should we
-  automate this?") to Side B ("what does the automation look like?").
-- **Approval-queue SLA metrics** — `GET /api/analytics/approvals` reports
-  pending-review aging in four buckets, oldest pending age, human
-  turnaround (mean/median/max), and escalation rate.
-- **Run performance metrics** — `GET /api/analytics/runs` reports latency
-  p50/p95/max, mean and p95 cost per run, failure rate, containment rate
-  (tickets resolved with no human touch), and human-touch rate.
-- **CSV exports for BI refresh** — `GET /api/export/runs.csv`,
-  `approvals.csv`, and `usage.csv` with column schemas pinned by tests, so
-  Power BI scheduled refresh survives API evolution.
-- **Batch ticket ingestion** — `POST /api/tickets/batch` processes up to
-  100 tickets per request with per-item isolation (one bad ticket never
-  blocks the rest) and an aggregated summary.
-- **Dashboard** — governance KPI cards (containment, escalation rate, p95
-  latency, oldest pending approval), a "Design n8n workflow" action on
-  every ROI analysis, and links to the CSV feeds.
+- **Optional API-key auth** (`AIOPS_API_KEY`): constant-time-key
+  comparison, dashboard header passthrough, 401 with
+  `WWW-Authenticate: Bearer` when enabled.
+- **Signed n8n intake** (`POST /api/tickets/signed`): HMAC-SHA256
+  signature + timestamp replay window (`AIOPS_WEBHOOK_SECRET`,
+  `AIOPS_WEBHOOK_MAX_SKEW`), constant-time verification, mirror of the
+  plain intake contract.
+- **Opt-in rate limiting** (`AIOPS_RATE_LIMIT`, `AIOPS_RATE_WINDOW`):
+  fixed-window per-IP limiter, 429 with `Retry-After`, `X-RateLimit-*`
+  headers, exempt `/health`.
+- **Structured request logging** (`AIOPS_REQUEST_LOG_FILE`): one JSON
+  line per request with request-ID propagation, latency, status, and
+  auth/rate-limit rejections included.
+- **`/ready` readiness probe**: checks the RAG corpus is loaded and the
+  JSON store is writable — `/health` (liveness) now has a real partner.
+- **Backup tooling** (`scripts/backup.py`): timestamped tar.gz snapshots
+  of the store, retention pruning, `--list`, `--retention`,
+  `AIOPS_BACKUP_DIR`.
+
+### Changed
+- CI hardening: `actions/checkout@v5` / `setup-python@v6` (clears the
+  Node 20 deprecation warnings), `fail-fast: false` so one Python
+  version failing no longer cancels the matrix, concurrency cancellation
+  for superseded runs.
+- Docker image ships the backup script; compose wires the security and
+  logging settings through and adds `restart: unless-stopped` plus a
+  `start_period` on the healthcheck.
+- `.env.example` documents every new variable, grouped by concern.
 
 ### Fixed
-- The quality-eval harness no longer leaks its rebound storage singleton
-  into the host process — running `eval_quality.main()` inside a test
-  suite left every later test reading a split-brain store.
-- Demo script now stores its analysis, so estimated monthly savings in
-  the monitoring summary reflects real numbers instead of $0.
+- None in this release; v1.1.0 shipped the latency-precision fix.
 
-### Stats
-- 46 tests (up from 28), all green; routing eval still 8/8 with 100%
-  escalation recall.
+## [v1.1.0] — 2026-09-22 — closing the operations loop
 
-## [1.0.0] — 2026-09-16
+- Workflow designer: Analysis → importable n8n JSON
+  (`POST /api/workflows/design`).
+- Approval-queue SLA metrics: aging buckets, human turnaround,
+  escalation rate (`/api/analytics/approvals`).
+- Run performance analytics: latency p50/p95/max, cost per run,
+  failure / containment / human-touch rates (`/api/analytics/runs`).
+- CSV export feeds for Power BI with schema pinned by tests
+  (`/api/export/{runs,approvals,usage}.csv`).
+- Batch ticket ingestion (`POST /api/tickets/batch`, ≤ 100 items).
+- Dashboard: containment/p95 KPIs, workflow designer button, BI feed links.
+- Latency measured with `perf_counter` at sub-millisecond precision
+  (mock-mode runs no longer collapse to 0 ms on fast machines).
 
-### Added
-- Side A: process analyzer with automation scoring, ROI/cost engine
-  (labor + token economics) emitting assumptions next to every figure.
-- Side B: 6-agent support pipeline (intake → knowledge/RAG → decision →
-  draft → quality → action) orchestrated with LangGraph.
-- Deterministic governance gates: monetary limit, security actions,
-  weak retrieval, low confidence — always human review, independent of
-  model confidence; enforced in code and pinned by tests.
-- Human-in-the-loop approval queue (queue → decide → execute/reject)
-  with append-only audit log.
-- Integrations: CRM, email, billing, Slack adapters with an outbox.
-- RAG over `knowledge_base/`: heading-aware chunking, TF-IDF cosine
+## [v1.0.0] — 2026-09-21 — initial platform
+
+- Typed contracts, config, JSON store, mock/live LLM gateway, ROI engine.
+- RAG layer: markdown ingestion, heading-aware chunking, TF-IDF cosine
   retrieval, live-embeddings path.
-- Mock/live LLM gateway — the whole platform runs offline in mock mode;
-  `AIOPS_MODE=live` + `OPENAI_API_KEY` swaps every call to a real model.
-- FastAPI service + operator dashboard, n8n ticket-intake bridge,
-  Docker Compose (API + n8n), quality eval harness with CI gate,
-  docs (architecture, governance, operations, BI integration).
+- Agentic support pipeline: 6 agents, deterministic risk gates,
+  LangGraph graph, CRM/email/billing/Slack adapters, audit log.
+- Operator dashboard, end-to-end demo, Docker + n8n compose, CI.
+
+[v1.2.0]: https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/compare/v1.1.0...v1.2.0
+[v1.1.0]: https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/compare/v1.0.0...v1.1.0
+[v1.0.0]: https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/releases/tag/v1.0.0
