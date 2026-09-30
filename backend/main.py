@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from . import config, designer, exports, pipeline, ratelimit, reqlog, security, store
 from .analytics import approval_sla_metrics
 from .analyzer import analyze_process
-from .run_metrics import run_performance_metrics
+from .run_metrics import feedback_metrics, run_performance_metrics
 from .integrations import actions as integ
 from .integrations.audit import audit_log
 from .models import (Feedback, PipelineResult, ProcessInput, ReviewDecision,
@@ -278,8 +278,12 @@ def approval_sla() -> dict:
 
 @app.get("/api/analytics/runs")
 def run_analytics() -> dict:
-    """Pipeline performance: latency percentiles, failure/containment, cost."""
-    return run_performance_metrics(storage.all("runs"))
+    """Pipeline performance: latency percentiles, failure/containment, cost,
+    plus the operator-satisfaction signal from run feedback."""
+    runs = storage.all("runs")
+    out = run_performance_metrics(runs)
+    out["feedback"] = feedback_metrics(storage.all("feedback"), runs)
+    return out
 
 
 @app.get("/api/usage")

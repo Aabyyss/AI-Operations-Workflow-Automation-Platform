@@ -59,3 +59,26 @@ def run_performance_metrics(runs: list[dict]) -> dict:
             "p95": round(percentile(costs, 95), 5) if costs else 0.0,
         },
     }
+
+
+def feedback_metrics(feedback: list[dict], runs: list[dict]) -> dict:
+    """Satisfaction signal from operator feedback, joined against runs.
+
+    Satisfaction without volume context is vanity: 3/3 thumbs-up means
+    nothing on run 3 and everything on run 300, so coverage is reported
+    alongside the ratio.
+    """
+    total_fb = len(feedback)
+    ups = sum(1 for f in feedback if f.get("rating") == "up")
+    downs = sum(1 for f in feedback if f.get("rating") == "down")
+    corrected = sum(1 for f in feedback if f.get("correction"))
+    total_runs = len(runs)
+
+    return {
+        "feedback_count": total_fb,
+        "thumbs_up": ups,
+        "thumbs_down": downs,
+        "satisfaction_pct": round(100.0 * ups / max(1, total_fb), 1),
+        "with_correction": corrected,
+        "coverage_pct": round(100.0 * total_fb / max(1, total_runs), 1),
+    }
