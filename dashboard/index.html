@@ -142,6 +142,17 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
     </div>
   </div>
 
+  <div class="row" style="margin-top:14px">
+    <div class="card">
+      <h2>LLM Budget</h2>
+      <div id="budget_out" class="muted">Loading…</div>
+    </div>
+    <div class="card">
+      <h2>Drift Canary</h2>
+      <div id="drift_out" class="muted">Loading…</div>
+    </div>
+  </div>
+
   <div class="card" style="margin-top:14px">
     <h2>Recent Ticket Runs</h2>
     <div id="runs_out" class="muted">No runs yet.</div>
@@ -178,7 +189,7 @@ window.setApiKey = (k) => { localStorage.setItem("aiops_api_key", k); location.r
 
 async function loadAll() {
   try {
-    const [summary, reviews, usage, audit, runs, sla, perf] = await Promise.all([
+    const [summary, reviews, usage, audit, runs, sla, perf, budget, drift] = await Promise.all([
       api("/api/analytics/summary"),
       api("/api/reviews"),
       api("/api/usage"),
@@ -186,6 +197,8 @@ async function loadAll() {
       api("/api/tickets"),
       api("/api/analytics/approvals"),
       api("/api/analytics/runs"),
+      api("/api/analytics/budget").catch(() => null),
+      api("/api/analytics/drift").catch(() => null),
     ]);
     renderKpis(summary, sla, perf);
     renderCosts(usage);
@@ -193,10 +206,13 @@ async function loadAll() {
     renderReviews(reviews);
     renderAudit(audit);
     renderRuns(runs);
+    renderBudget(budget);
+    renderDrift(drift);
   } catch (e) { console.error(e); }
 }
 
 function renderKpis(s, sla, perf) {
+  const fb = perf.feedback || {};
   const k = [
     ["Tickets processed", s.tickets_processed, ""],
     ["Containment rate", perf.containment_rate_pct, "% no human touched"],
@@ -204,11 +220,35 @@ function renderKpis(s, sla, perf) {
     ["Pending approvals", sla.pending, `· oldest ${sla.oldest_pending_minutes}m`],
     ["Escalation rate", sla.escalation_rate_pct, "%"],
     ["p95 latency", perf.latency_ms.p95, "ms"],
+    ["Satisfaction", fb.feedback_count ? fb.satisfaction_pct + "%" : "—",
+     fb.feedback_count ? `of ${fb.feedback_count} ratings · ${fb.with_correction} corrections` : "no feedback yet"],
     ["LLM spend", "$" + (s.total_llm_cost_usd||0).toFixed(4), ""],
     ["Est. monthly savings", money(s.estimated_monthly_savings_usd||0), ""],
   ];
   $("kpis").innerHTML = k.map(([l,v,u]) =>
     `<div class="card"><div class="muted">${l}</div><div class="kpi">${esc(v)}<small>${u}</small></div></div>`).join("");
+}
+
+function renderBudget(b) {
+  if (!b || !b.enabled) { $("budget_out").innerHTML =
+    '<span class="muted">No budget configured. Set <code>AIOPS_MONTHLY_BUDGET_USD</code> to enable spend tracking and alerts.</span>'; return; }
+  const pct = Math.min(100, b.utilization_pct || 0);
+  const cls = b.alert ? "w" : "g";
+  $("budget_out").innerHTML = `
+    <div class="kpi">$${Number(b.spent_usd).toFixed(4)}<small> of $${b.budget_usd} · ${b.utilization_pct}%</small></div>
+    <div class="bar"><i class="${cls}" style="width:${pct}%"></i></div>
+    <div class="muted" style="margin-top:6px">Projected month: $${b.projected_month_usd} ${b.alert ? '· <span class="warn">alert: projection exceeds budget</span>' : ''}</div>`;
+}
+
+function renderDrift(d) {
+  if (!d) { $("drift_out").innerHTML = '<span class="muted">Drift canary unavailable.</span>'; return; }
+  if (d.status === "insufficient_data") { $("drift_out").innerHTML =
+    `<span class="muted">Need ${d.required} runs for a baseline comparison (${d.runs_total} so far).</span>`; return; }
+  const badge = d.status === "alert" ? '<span class="pill review">drift alert</span>' : '<span class="pill auto">nominal</span>';
+  const rows = Object.entries(d.signals).map(([k, s]) =>
+    `<tr><td>${k}</td><td>${s.baseline_pct}%</td><td>${s.recent_pct}%</td><td class="${s.alert ? "bad" : ""}">${s.delta_pct > 0 ? "+" : ""}${s.delta_pct}pp</td></tr>`).join("");
+  $("drift_out").innerHTML = `${badge}<table style="margin-top:8px"><thead><tr><th></th><th>baseline</th><th>recent</th><th>Δ</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="muted" style="margin-top:6px">Last ${d.window} runs vs previous ${d.window} · alert at ±${d.threshold_pct}pp</div>`;
 }
 
 function renderCosts(usage) {
@@ -253,10 +293,38 @@ function renderAudit(events) {
   ).join("") : "No events yet.";
 }
 
+let lastRuns = [];
+
 function renderRuns(tickets) {
   if (!tickets.length) { $("runs_out").innerHTML = '<span class="muted">No runs yet.</span>'; return; }
+  lastRuns = tickets;
   const ids = [...new Set(tickets.map(t=>t.id))].slice(-8).reverse();
-  $("runs_out").innerHTML = ids.map(id => `<div style="margin:4px 0"><b>${esc(id)}</b> <span class="muted">${esc(tickets.find(t=>t.id===id).subject||"")}</span></div>`).join("");
+  $("runs_out").innerHTML = ids.map(id => {
+    const t = tickets.find(x=>x.id===id);
+    return `<div style="margin:4px 0; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+      <b>${esc(id)}</b> <span class="muted">${esc(t.subject||"")}</span>
+      <span class="muted" style="margin-left:auto"></span>
+      <button class="ghost" style="padding:4px 10px; font-size:12px" onclick="giveFeedback('${id}','up')">👍</button>
+      <button class="ghost" style="padding:4px 10px; font-size:12px" onclick="giveFeedback('${id}','down')">👎</button>
+      <button class="ghost" style="padding:4px 10px; font-size:12px" onclick="replayRun('${id}')">Replay</button>
+    </div>`;
+  }).join("");
+}
+
+async function giveFeedback(runId, rating) {
+  const correction = rating === "down" ? prompt("What should have happened instead?") : null;
+  try {
+    await api(`/api/runs/${runId}/feedback`, {method:"POST", body: JSON.stringify({run_id: runId, rating, correction})});
+    loadAll();
+  } catch(e) { alert("Feedback failed: " + e.message); }
+}
+
+async function replayRun(runId) {
+  try {
+    const r = await api(`/api/runs/${runId}/replay`, {method:"POST"});
+    const ok = r.identical_disposition && r.identical_response;
+    alert(`Replay of ${runId}\n\nDisposition identical: ${r.identical_disposition}\nResponse identical: ${r.identical_response}\nReplay run: ${r.replay.run_id}\n\n${ok ? "Behavior unchanged." : "Behavior changed — review before shipping!"}`);
+  } catch(e) { alert("Replay failed: " + e.message); }
 }
 
 async function analyze() {
