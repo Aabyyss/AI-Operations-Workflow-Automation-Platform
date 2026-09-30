@@ -13,7 +13,7 @@ from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                Response, StreamingResponse)
 from pydantic import BaseModel
 
-from . import config, designer, exports, metrics, pipeline, ratelimit, reqlog, security, store
+from . import config, designer, exports, metrics, outbound, pipeline, ratelimit, reqlog, security, store
 from .analytics import approval_sla_metrics
 from .analyzer import analyze_process
 from .run_metrics import feedback_metrics, run_performance_metrics
@@ -410,7 +410,21 @@ def audit_records(limit: int = 200) -> list[dict]:
 
 @app.get("/api/outbox")
 def outbox_records() -> list[dict]:
-    return storage.all("outbox")
+    """Queued outbound actions with delivery state folded in."""
+    return outbound.outbox_view()
+
+
+@app.post("/api/outbox/deliver")
+def deliver_outbox() -> dict:
+    """Attempt signed delivery of pending outbox records (cron/n8n target)."""
+    summary = outbound.deliver_pending()
+    return summary
+
+
+@app.get("/api/deliveries")
+def delivery_ledger(limit: int = 100) -> list[dict]:
+    """Audit-grade ledger of every outbound delivery attempt."""
+    return storage.all("deliveries")[-limit:]
 
 
 @app.get("/api/analytics/summary")
