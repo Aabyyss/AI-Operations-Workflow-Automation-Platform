@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from . import config, designer, exports, pipeline, ratelimit, reqlog, security, store
+from . import config, designer, exports, metrics, pipeline, ratelimit, reqlog, security, store
 from .analytics import approval_sla_metrics
 from .analyzer import analyze_process
 from .run_metrics import feedback_metrics, run_performance_metrics
@@ -289,6 +289,20 @@ def run_analytics() -> dict:
 @app.get("/api/usage")
 def usage_records() -> list[dict]:
     return storage.all("usage")
+
+
+@app.get("/metrics")
+def prometheus_metrics() -> Response:
+    """Prometheus scrape endpoint (text/plain, version 0.0.4)."""
+    body = metrics.render_prometheus(
+        runs=storage.all("runs"),
+        reviews=storage.all("reviews"),
+        usage=storage.all("usage"),
+        feedback=storage.all("feedback"),
+        outbox=storage.all("outbox"),
+        knowledge_chunks=len(retriever.index.docs),
+    )
+    return Response(content=body, media_type=metrics.CONTENT_TYPE)
 
 
 @app.get("/api/audit")
