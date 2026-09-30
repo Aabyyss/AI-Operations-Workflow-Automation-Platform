@@ -6,6 +6,54 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v1.3.0] — 2026-10-01 — the learning loop
+
+The platform no longer just runs and reports — it can be *questioned*.
+Every automated answer can collect human feedback, be replayed against
+the current model/policy/thresholds, and be watched for behavioral
+drift. Spend gets a budget with projection alerts; queued actions get
+signed outbound delivery with a retry budget; data gets a retention
+policy. As always: every feature is off-by-default-safe, and the demo
+still runs with zero configuration.
+
+### Added
+- **Feedback capture**: `POST /api/runs/{id}/feedback` (thumbs + optional
+  correction), audit-logged; satisfaction ratio, correction count and
+  coverage joined into `/api/analytics/runs`.
+- **Run replay**: `POST /api/runs/{id}/replay` re-executes the original
+  ticket and diffs disposition and response — proof, not hope, that a
+  prompt or policy change preserved behavior.
+- **SSE run stream**: `GET /api/runs/stream` tails new runs (backfills
+  recent history on connect), hand-rolled on `StreamingResponse` — zero
+  new dependencies.
+- **Prometheus `/metrics`**: dependency-free text exposition of
+  throughput by disposition, latency quantiles, cumulative cost, queue
+  depth, feedback counts, corpus size.
+- **Outbound webhooks**: `AIOPS_OUTBOX_URL` turns the outbox into signed
+  HTTP deliveries (same HMAC scheme as intake), with per-attempt ledger,
+  exponential-retry accounting, dead-letter state and operator reset
+  (`POST /api/outbox/{id}/retry`). Delivered records are never re-sent.
+- **Model routing**: `AIOPS_LIGHT_MODEL` for classification-shaped work
+  (intake, quality gates), `AIOPS_HEAVY_MODEL` for customer-facing
+  drafts; inert until set, visible per-call in usage records.
+- **Budget guardrails**: `AIOPS_MONTHLY_BUDGET_USD` +
+  `GET /api/analytics/budget` — spend, linear month projection, alert at
+  100% spend or 120% projection.
+- **Drift canary**: `GET /api/analytics/drift` compares the last N runs
+  to the N before them on containment, escalation and failure; ±10pp
+  swings raise the alarm.
+- **Retention**: `POST /api/admin/prune` (dry-run by default) applies
+  per-collection age/size caps; unparseable timestamps are kept, never
+  silently destroyed; executed prunes are audit-logged.
+- **Dashboard**: satisfaction KPI, budget meter, drift-canary panel,
+  per-run 👍/👎/Replay actions, and a light/dark/auto theme toggle.
+
+### Changed
+- Demo script gained a learning-loop section; OPERATIONS/BI_INTEGRATION
+  document every new endpoint; project plan records milestones 18–24.
+- `.env.example` documents the routing, budget, outbox and retention
+  settings.
+
 ## [v1.2.0] — 2026-09-22 — production hardening
 
 Everything in this release is opt-in: the platform still runs offline in
