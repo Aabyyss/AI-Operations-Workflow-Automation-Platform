@@ -70,6 +70,11 @@ class Storage:
                     return item
         return None
 
+    def replace_all(self, name: str, items: list[dict[str, Any]]) -> None:
+        """Atomically swap a collection (used by retention pruning)."""
+        with _lock:
+            self._save(name, items)
+
 
 storage = Storage()
 

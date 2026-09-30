@@ -23,6 +23,7 @@ from .integrations.audit import audit_log
 from .models import (Feedback, PipelineResult, ProcessInput, ReviewDecision,
                      Ticket, WorkflowDesignRequest, iso_now)
 from .rag import retriever
+from .retention import COLLECTION_LIMITS, select_for_prune
 from .store import storage
 
 app = FastAPI(
@@ -480,6 +481,24 @@ def analytics_summary() -> dict:
         "mode": config.MODE,
         "knowledge_chunks": len(retriever.index.docs),
     }
+
+
+@app.post("/api/admin/prune")
+def prune_collections(confirm: bool = False) -> dict:
+    """Apply retention policy (dry-run by default; confirm=true to execute)."""
+    from .models import iso_now
+
+    report: dict[str, int] = {}
+    for collection, (max_age_days, max_records) in COLLECTION_LIMITS.items():
+        records = storage.all(collection)
+        keep, prune = select_for_prune(records, max_age_days, max_records)
+        report[collection] = len(prune)
+        if confirm and prune:
+            storage.replace_all(collection, keep)
+    if confirm:
+        audit_log("retention_pruned", {**report, "ts": iso_now()})
+    return {"mode": "executed" if confirm else "dry-run",
+            "would_prune" if not confirm else "pruned": report}
 
 
 @app.post("/api/knowledge/reload")
