@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from . import config, designer, exports, metrics, outbound, pipeline, ratelimit, reqlog, security, store
 from .analytics import approval_sla_metrics
 from .budget import budget_status
+from .drift import drift_report
 from .analyzer import analyze_process
 from .run_metrics import feedback_metrics, run_performance_metrics
 from .integrations import actions as integ
@@ -389,6 +390,13 @@ def run_analytics() -> dict:
 @app.get("/api/usage")
 def usage_records() -> list[dict]:
     return storage.all("usage")
+
+
+@app.get("/api/analytics/drift")
+def drift_canary(window: int = 50) -> dict:
+    """Recent-vs-baseline behavior comparison — alerts when containment,
+    escalation or failure rates swing beyond the threshold."""
+    return drift_report(storage.all("runs"), window=max(5, min(window, 500)))
 
 
 @app.get("/api/analytics/budget")
