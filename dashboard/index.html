@@ -13,8 +13,11 @@
     --pill-auto-bg:#0e3b2a; --pill-review-bg:#3b2f0e;
     --pill-rejected-bg:#3b1219; --pill-pending-bg:#22284a;
   }
+  /* Light palette: applied via the OS (no data-theme attr) or explicitly
+     via data-theme="light" set by the header toggle. data-theme="dark"
+     forces dark regardless of OS. */
   @media (prefers-color-scheme: light){
-    :root{
+    :root:not([data-theme="dark"]){
       color-scheme: light;
       --bg:#f4f6fb; --panel:#ffffff; --panel2:#eef1f8; --line:#d8deed;
       --text:#1c2333; --muted:#5b6579; --accent:#3d6ef0; --good:#0f9d6a;
@@ -23,6 +26,15 @@
       --pill-rejected-bg:#fde2e5; --pill-pending-bg:#e6eaf5;
     }
   }
+  :root[data-theme="light"]{
+    color-scheme: light;
+    --bg:#f4f6fb; --panel:#ffffff; --panel2:#eef1f8; --line:#d8deed;
+    --text:#1c2333; --muted:#5b6579; --accent:#3d6ef0; --good:#0f9d6a;
+    --warn:#9a5b00; --bad:#d64550; --on-good:#ffffff;
+    --pill-auto-bg:#d8f5e6; --pill-review-bg:#fdeed3;
+    --pill-rejected-bg:#fde2e5; --pill-pending-bg:#e6eaf5;
+  }
+  :root[data-theme="dark"]{ color-scheme: dark; }
   *{box-sizing:border-box; margin:0; padding:0}
   body{background:var(--bg); color:var(--text);
        font:15px/1.5 "Segoe UI", system-ui, sans-serif; padding:24px}
@@ -74,7 +86,15 @@
       <h1>AI Operations &amp; Workflow Automation Platform</h1>
       <div class="muted">Should we automate this? · How do we run it safely? · Is it actually working?</div>
     </div>
-    <button class="ghost" onclick="loadAll()">Refresh</button>
+    <div style="display:flex; gap:8px; align-items:center">
+      <select id="theme_select" aria-label="Theme" style="width:auto; padding:7px 8px"
+              onchange="setTheme(this.value)">
+        <option value="auto">Theme: auto</option>
+        <option value="light">Theme: light</option>
+        <option value="dark">Theme: dark</option>
+      </select>
+      <button class="ghost" onclick="loadAll()">Refresh</button>
+    </div>
   </div>
 
   <div class="cards" id="kpis"></div>
@@ -186,6 +206,23 @@ async function api(path, opts) {
 // Set once from the console (or a bookmarklet) when the API runs with
 // AIOPS_API_KEY:  localStorage.setItem("aiops_api_key", "<key>")
 window.setApiKey = (k) => { localStorage.setItem("aiops_api_key", k); location.reload(); };
+
+// Theme: "auto" follows the OS; light/dark override it. Persisted.
+function applyTheme(mode) {
+  const root = document.documentElement;
+  if (mode === "auto") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", mode);
+}
+function setTheme(mode) {
+  localStorage.setItem("aiops_theme", mode);
+  applyTheme(mode);
+}
+(function () {
+  const mode = localStorage.getItem("aiops_theme") || "auto";
+  applyTheme(mode);
+  const sel = document.getElementById("theme_select");
+  if (sel) sel.value = mode;
+})();
 
 async function loadAll() {
   try {
