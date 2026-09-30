@@ -159,6 +159,51 @@ def approve_one() -> None:
     print(f"Executed: {out['executed_actions']}")
 
 
+def learning_loop() -> None:
+    """v1.3.0 surface: feedback, replay, drift, budget, metrics."""
+    print("\n" + "=" * 68)
+    print("LEARNING LOOP - feedback, replay, drift, budget")
+    print("=" * 68)
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    with TestClient(app) as client:
+        runs = client.get("/api/runs").json()
+        if not runs:
+            print("No runs to learn from.")
+            return
+
+        # 1. Operator feedback on an automated run.
+        auto = next((r for r in runs if r["disposition"] == "auto_resolved"), runs[0])
+        fb = client.post(f"/api/runs/{auto['id']}/feedback", json={
+            "run_id": auto["id"], "rating": "up", "reviewer": "manager_amy",
+        }).json()
+        print(f"\nFeedback recorded: {fb['id']} rating=up on {auto['id']}")
+
+        # 2. Replay it — prove the pipeline still behaves identically.
+        rp = client.post(f"/api/runs/{auto['id']}/replay").json()
+        print(f"Replay: disposition identical={rp['identical_disposition']}  "
+              f"response identical={rp['identical_response']}")
+
+        # 3. Drift canary across all demo runs.
+        d = client.get("/api/analytics/drift").json()
+        status = d["status"]
+        print(f"Drift canary: {status}" +
+              (f" (needs {d['required']} runs, have {d['runs_total']})"
+               if status == "insufficient_data" else
+               " ".join(f"{k}:{s['delta_pct']:+}pp" for k, s in d["signals"].items())))
+
+        # 4. Budget (disabled by default — show the shape).
+        b = client.get("/api/analytics/budget").json()
+        print(f"Budget: spent=${b['spent_usd']:.5f} "
+              + (f"of ${b['budget_usd']} (enabled)" if b["enabled"]
+                 else "— set AIOPS_MONTHLY_BUDGET_USD to enable alerts"))
+
+        # 5. Prometheus exposition line count as a smoke check.
+        m = client.get("/metrics")
+        print(f"Prometheus /metrics: HTTP {m.status_code}, "
+              f"{len([l for l in m.text.splitlines() if l and not l.startswith('#')])} metric lines")
+
+
 def summary() -> None:
     print("\n" + "=" * 68)
     print("MONITORING - is it actually working? (/api/analytics/summary)")
@@ -205,4 +250,6 @@ if __name__ == "__main__":
     side_a()
     side_b()
     approve_one()
+    learning_loop()
+    summary()
     summary()
