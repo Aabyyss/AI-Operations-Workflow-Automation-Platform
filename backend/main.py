@@ -187,6 +187,51 @@ def list_runs(limit: int = 50) -> list[dict]:
     return storage.all("runs")[-limit:]
 
 
+@app.post("/api/runs/{run_id}/replay")
+def replay_run(run_id: str) -> dict:
+    """Re-execute the original ticket of a stored run and compare.
+
+    Why: a prompt change, a new policy doc or a threshold tweak should be
+    provable against real past tickets, not hoped for. The replay is a
+    *new* run (new id, fresh audit) — never a mutation of history — and
+    the comparison keeps governance honest: if the disposition or the
+    refund amount changes after a 'harmless' prompt edit, this endpoint
+    is where that becomes visible.
+    """
+    record = storage.get("runs", run_id)
+    if not record:
+        raise HTTPException(404, f"run not found: {run_id}")
+    ticket_data = storage.get("tickets", record["ticket_id"])
+    if not ticket_data:
+        raise HTTPException(409, "original ticket no longer stored (pruned?)")
+
+    ticket = Ticket.model_validate(ticket_data)
+    rerun = pipeline.run_pipeline(ticket)
+    prior = {
+        "run_id": record["id"],
+        "disposition": record["disposition"],
+        "total_cost_usd": record.get("total_cost_usd", 0.0),
+        "total_latency_ms": record.get("total_latency_ms", 0.0),
+        "final_response": record.get("final_response"),
+        "actions_taken": record.get("actions_taken", []),
+    }
+    after = {
+        "run_id": rerun.id,
+        "disposition": rerun.disposition.value,
+        "total_cost_usd": rerun.total_cost_usd,
+        "total_latency_ms": rerun.total_latency_ms,
+        "final_response": rerun.final_response,
+        "actions_taken": rerun.actions_taken,
+    }
+    audit_log("run_replayed", {"original_run_id": run_id, "replay_run_id": rerun.id})
+    return {
+        "original": prior,
+        "replay": after,
+        "identical_disposition": prior["disposition"] == after["disposition"],
+        "identical_response": prior["final_response"] == after["final_response"],
+    }
+
+
 @app.post("/api/tickets/demo")
 def run_demo_ticket() -> dict:
     """Submit the canonical demo ticket (duplicate charge refund)."""
