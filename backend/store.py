@@ -28,6 +28,8 @@ class Storage:
             "audit": config.DATA_DIR / "audit.json",
             "outbox": config.DATA_DIR / "outbox.json",
             "workflows": config.DATA_DIR / "workflows.json",
+            "feedback": config.DATA_DIR / "feedback.json",
+            "deliveries": config.DATA_DIR / "deliveries.json",
         }
 
     def _load(self, name: str) -> list[dict[str, Any]]:

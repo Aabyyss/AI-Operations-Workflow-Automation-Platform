@@ -226,6 +226,18 @@ class ReviewDecision(BaseModel):
     note: str | None = None
 
 
+class Feedback(BaseModel):
+    """Operator feedback on a finished run — thumbs plus an optional
+    correction. This is the raw material of the improvement loop: without
+    it, 'is the AI actually right?' is only answerable by intuition."""
+    id: str = Field(default_factory=lambda: new_id("fb"))
+    run_id: str
+    rating: Literal["up", "down"]
+    correction: str | None = None
+    reviewer: str | None = None
+    created_at: str = Field(default_factory=iso_now)
+
+
 class WorkflowDesignRequest(BaseModel):
     """Ask the workflow designer to emit an n8n import for a stored analysis."""
     process_id: str

@@ -18,8 +18,8 @@ from .analyzer import analyze_process
 from .run_metrics import run_performance_metrics
 from .integrations import actions as integ
 from .integrations.audit import audit_log
-from .models import (PipelineResult, ProcessInput, ReviewDecision, Ticket,
-                     WorkflowDesignRequest, iso_now)
+from .models import (Feedback, PipelineResult, ProcessInput, ReviewDecision,
+                     Ticket, WorkflowDesignRequest, iso_now)
 from .rag import retriever
 from .store import storage
 
@@ -339,6 +339,26 @@ def reload_knowledge() -> dict:
     n = retriever.reload()
     audit_log("knowledge_reloaded", {"chunks": n})
     return {"chunks": n}
+
+
+# --------------------------------------------------------------- feedback
+@app.post("/api/runs/{run_id}/feedback", status_code=201)
+def submit_feedback(run_id: str, fb: Feedback) -> dict:
+    """Attach operator feedback to a finished run."""
+    if not storage.get("runs", run_id):
+        raise HTTPException(404, f"run not found: {run_id}")
+    fb.run_id = run_id
+    storage.append("feedback", fb.model_dump())
+    audit_log("feedback_recorded", {"feedback_id": fb.id, "run_id": run_id,
+                                    "rating": fb.rating})
+    return fb.model_dump()
+
+
+@app.get("/api/feedback")
+def list_feedback() -> list[dict]:
+    """All feedback, newest first."""
+    return sorted(storage.all("feedback"), key=lambda f: f.get("created_at", ""),
+                  reverse=True)
 
 
 # ---------------------------------------------------------------------------
