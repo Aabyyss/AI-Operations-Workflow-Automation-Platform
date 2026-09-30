@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from . import config, designer, exports, metrics, outbound, pipeline, ratelimit, reqlog, security, store
 from .analytics import approval_sla_metrics
+from .budget import budget_status
 from .analyzer import analyze_process
 from .run_metrics import feedback_metrics, run_performance_metrics
 from .integrations import actions as integ
@@ -387,6 +388,13 @@ def run_analytics() -> dict:
 @app.get("/api/usage")
 def usage_records() -> list[dict]:
     return storage.all("usage")
+
+
+@app.get("/api/analytics/budget")
+def budget_analytics() -> dict:
+    """LLM spend vs the configured monthly budget (alerts at 100% spend
+    or a 120% projection). Disabled unless AIOPS_MONTHLY_BUDGET_USD > 0."""
+    return budget_status(storage.all("usage"), config.MONTHLY_BUDGET_USD)
 
 
 @app.get("/metrics")

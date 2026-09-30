@@ -34,6 +34,9 @@ CHAT_MODEL = os.getenv("AIOPS_CHAT_MODEL", "gpt-4o-mini")
 # default to CHAT_MODEL so routing is inert until configured.
 LIGHT_MODEL = os.getenv("AIOPS_LIGHT_MODEL", CHAT_MODEL)
 HEAVY_MODEL = os.getenv("AIOPS_HEAVY_MODEL", CHAT_MODEL)
+
+# Monthly LLM budget in USD; 0 disables budget alerts entirely.
+MONTHLY_BUDGET_USD = float(os.getenv("AIOPS_MONTHLY_BUDGET_USD", "0"))
 EMBED_MODEL = os.getenv("AIOPS_EMBED_MODEL", "text-embedding-3-small")
 
 # Public base URL n8n (or any external system) uses to reach this API.
