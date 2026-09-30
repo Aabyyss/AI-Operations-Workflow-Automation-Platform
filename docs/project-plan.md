@@ -42,6 +42,13 @@ in one working system.
 | 15 | Approval-queue SLA + run performance analytics | ✅ | `/api/analytics/approvals`, `/api/analytics/runs` with p50/p95, containment, aging |
 | 16 | Schema-pinned CSV exports for BI refresh | ✅ | `/api/export/{runs,approvals,usage}.csv`, columns pinned in CI |
 | 17 | Batch ingestion with per-item isolation | ✅ | `POST /api/tickets/batch` (≤100), aggregated summary |
+| 18 | Feedback capture + satisfaction analytics | ✅ | `POST /api/runs/{id}/feedback`, satisfaction/coverage in `/api/analytics/runs` |
+| 19 | Prometheus `/metrics` exposition | ✅ | dependency-free renderer, counts live runs, pinned by tests |
+| 20 | Run replay + SSE run stream | ✅ | `POST /api/runs/{id}/replay` diffs disposition/response; `GET /api/runs/stream` |
+| 21 | Outbound webhook delivery (outbox → signed HTTP) | ✅ | signed POSTs, retry ledger, dead-letter + reset (`AIOPS_OUTBOX_URL`) |
+| 22 | Model routing (light/heavy tiers) | ✅ | usage records show tier per agent; inert until `AIOPS_LIGHT/HEAVY_MODEL` set |
+| 23 | Budget guardrails + drift canary + retention | ✅ | `/api/analytics/budget`, `/api/analytics/drift`, `POST /api/admin/prune` |
+| 24 | Dashboard: learning loop + theme toggle | ✅ | satisfaction KPI, budget meter, drift panel, per-run feedback/replay buttons |
 
 ## 3. Development roadmap (phases)
 

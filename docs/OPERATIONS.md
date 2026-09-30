@@ -32,8 +32,14 @@ JSON persistence under `data/` (git-ignored), behind `backend/store.py`:
 ```text
 data/
   tickets.json       every ticket + full run trace
+  runs.json          one record per pipeline execution
   reviews.json       human approval queue and decisions
+  usage.json         per-LLM-call token + cost ledger
   outbox.json        executed/queued actions (refund, email, CRM, Slack)
+  deliveries.json    outbound delivery attempts ledger (v1.3.0)
+  feedback.json      operator thumbs/corrections per run (v1.3.0)
+  workflows.json     generated n8n workflow records
+  analyses.json      stored process analyses
   audit.jsonl        append-only audit log — one line per event
 ```
 
@@ -107,6 +113,22 @@ is reviewable in a PR like any other integration change.
 `BI_INTEGRATION.md` has field-level schema and a sample M query. The CSV
 schemas are pinned by tests (`tests/test_exports.py`) — a breaking column
 change fails CI instead of silently breaking a scheduled refresh.
+
+### 5.1 v1.3.0 operational endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /metrics` | Prometheus scrape: throughput, latency quantiles, cost, queue depth, feedback |
+| `GET /api/analytics/budget` | spend vs `AIOPS_MONTHLY_BUDGET_USD`, 120% projection alert |
+| `GET /api/analytics/drift` | recent-vs-baseline containment/escalation/failure swing |
+| `POST /api/runs/{id}/replay` | re-execute a stored ticket, diff disposition + response |
+| `GET /api/runs/stream` | SSE tail of new runs (backfills recent history on connect) |
+| `POST /api/runs/{id}/feedback` · `GET /api/feedback` | operator thumbs + corrections |
+| `POST /api/outbox/deliver` | flush queued actions as signed webhooks (`AIOPS_OUTBOX_URL`) |
+| `POST /api/outbox/{id}/retry` | reset a dead delivery with a fresh retry budget |
+| `GET /api/deliveries` | audit-grade ledger of every delivery attempt |
+| `POST /api/admin/prune` | retention dry-run; `?confirm=true` executes (see §7) |
+| Model routing | `AIOPS_LIGHT_MODEL` (intake/quality) vs `AIOPS_HEAVY_MODEL` (drafts) — inert until set |
 
 ## 6. Troubleshooting
 

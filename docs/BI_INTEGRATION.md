@@ -28,6 +28,10 @@ table via **Get Data → Web** (or a scheduled dataflow pointing at the API).
    monthly spend at current volume. (Usage)
 4. **Operations** — queue-aging buckets, human turnaround median, escalation
    rate, containment rate. (Approvals + RunPerf + Audit)
+5. **Learning loop** *(v1.3.0)* — satisfaction % from `/api/analytics/runs`
+   (`feedback` block: thumbs ratio, correction count, coverage), drift-signal
+   deltas from `/api/analytics/drift`, budget utilization and projection from
+   `/api/analytics/budget`, delivery outcomes from `/api/deliveries`.
 
 ## Refresh
 
@@ -36,3 +40,6 @@ pinned by `tests/test_exports.py`, so a breaking schema change fails CI
 before it can break a dashboard. `Get Data → Web` on
 `/api/export/runs.csv` (or a dataflow pointing at the API) refreshes on
 any cadence; the raw stores update on every request.
+
+For infrastructure monitoring rather than BI, point Prometheus at
+`GET /metrics` (text exposition, v0.0.4) — no exporter sidecar needed.
