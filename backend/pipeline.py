@@ -186,6 +186,7 @@ def run_draft(ticket: Ticket, intake: IntakeResult, knowledge: KnowledgeResult,
     resp = llm.chat(
         system="Write a short, warm, policy-grounded customer reply. Only promise what the policy says.",
         user=prompt,
+        tier="heavy",
     )
     data = json.loads(resp["text"])
     usage = record_usage(llm, resp["model"], resp["tokens_in"], resp["tokens_out"], "draft", ticket.id)

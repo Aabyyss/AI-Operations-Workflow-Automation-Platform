@@ -29,8 +29,13 @@ class BaseLLM(ABC):
     name: str = "base"
 
     @abstractmethod
-    def chat(self, system: str, user: str, temperature: float = 0.2) -> LLMResponse:
-        """Return a chat completion with token accounting."""
+    def chat(self, system: str, user: str, temperature: float = 0.2,
+             tier: str = "light") -> LLMResponse:
+        """Return a chat completion with token accounting.
+
+        `tier` selects the model class: "light" for classification-shaped
+        work (intake, quality gates), "heavy" where quality pays (drafts).
+        """
 
 
 # ---------------------------------------------------------------------------
@@ -41,7 +46,8 @@ class BaseLLM(ABC):
 class MockLLM(BaseLLM):
     name = "mock"
 
-    def chat(self, system: str, user: str, temperature: float = 0.2) -> LLMResponse:
+    def chat(self, system: str, user: str, temperature: float = 0.2,
+             tier: str = "light") -> LLMResponse:
         task = ""
         m = json.loads(user.split("MOCK_TASK:", 1)[1].split("\n", 1)[0]) if "MOCK_TASK:" in user else {}
         task = m.get("task", "generic")
@@ -60,7 +66,8 @@ class MockLLM(BaseLLM):
         # Rough token estimate: 4 chars per token, deterministic.
         tokens_in = (len(system) + len(user)) // 4
         tokens_out = len(text) // 4
-        return LLMResponse(text=text, tokens_in=tokens_in, tokens_out=tokens_out, model="mock-1")
+        model = "mock-heavy" if tier == "heavy" else "mock-light"
+        return LLMResponse(text=text, tokens_in=tokens_in, tokens_out=tokens_out, model=model)
 
     # -- task implementations ------------------------------------------------
     def _intake(self, user: str) -> str:
@@ -86,7 +93,9 @@ class MockLLM(BaseLLM):
 class OpenAILLM(BaseLLM):
     name = "live"
 
-    def chat(self, system: str, user: str, temperature: float = 0.2) -> LLMResponse:
+    def chat(self, system: str, user: str, temperature: float = 0.2,
+             tier: str = "light") -> LLMResponse:
+        model = model_for_tier(tier)
         try:
             from openai import OpenAI  # optional dependency
         except ImportError as exc:  # pragma: no cover
@@ -99,7 +108,7 @@ class OpenAILLM(BaseLLM):
             base_url=config.OPENAI_BASE_URL,
         )
         resp = client.chat.completions.create(
-            model=config.CHAT_MODEL,
+            model=model,
             temperature=temperature,
             messages=[
                 {"role": "system", "content": system},
@@ -111,8 +120,13 @@ class OpenAILLM(BaseLLM):
             text=resp.choices[0].message.content or "",
             tokens_in=getattr(usage, "prompt_tokens", 0) or 0,
             tokens_out=getattr(usage, "completion_tokens", 0) or 0,
-            model=config.CHAT_MODEL,
+            model=model,
         )
+
+
+def model_for_tier(tier: str) -> str:
+    """Resolve a routing tier to the configured model name."""
+    return config.HEAVY_MODEL if tier == "heavy" else config.LIGHT_MODEL
 
 
 def get_llm() -> BaseLLM:

@@ -28,6 +28,12 @@ MODE = os.getenv("AIOPS_MODE", "mock").lower()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 CHAT_MODEL = os.getenv("AIOPS_CHAT_MODEL", "gpt-4o-mini")
+
+# Model routing: cheap model for classification-shaped work (intake,
+# quality gates), stronger model where quality pays (drafting). Both
+# default to CHAT_MODEL so routing is inert until configured.
+LIGHT_MODEL = os.getenv("AIOPS_LIGHT_MODEL", CHAT_MODEL)
+HEAVY_MODEL = os.getenv("AIOPS_HEAVY_MODEL", CHAT_MODEL)
 EMBED_MODEL = os.getenv("AIOPS_EMBED_MODEL", "text-embedding-3-small")
 
 # Public base URL n8n (or any external system) uses to reach this API.
