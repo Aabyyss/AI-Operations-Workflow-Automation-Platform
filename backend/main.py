@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
+                               Response, StreamingResponse)
 from pydantic import BaseModel
 
 from . import config, designer, exports, metrics, pipeline, ratelimit, reqlog, security, store
@@ -185,6 +186,58 @@ def get_ticket(ticket_id: str) -> dict:
 def list_runs(limit: int = 50) -> list[dict]:
     """Full pipeline run records — the BI 'Runs' table feed."""
     return storage.all("runs")[-limit:]
+
+
+@app.get("/api/runs/stream")
+def stream_runs(limit: int = 0, poll_seconds: float = 0.5,
+                max_wait_seconds: float = 10.0) -> Response:
+    """Server-Sent Events tail of the runs store.
+
+    The dashboard (or an n8n Execute Workflow trigger) subscribes once and
+    receives every new run as it lands — no polling loops in clients.
+    Hand-rolled on StreamingResponse: an SSE frame is just `data:` lines,
+    and the platform stays at zero extra dependencies. With limit=0 the
+    stream stays open until the client disconnects; a positive limit
+    closes after that many events, which also makes it testable.
+    """
+    import asyncio
+    import json as _json
+
+    def _frame(r: dict) -> str:
+        payload = _json.dumps({k: r[k] for k in
+                               ("id", "ticket_id", "disposition",
+                                "total_cost_usd", "total_latency_ms")
+                               if k in r})
+        return f"event: run\nid: {r['id']}\ndata: {payload}\n\n"
+
+    async def gen():
+        seen: set[str] = set()
+        sent = 0
+        # Backfill the most recent runs so a fresh subscriber gets instant
+        # context, then tail the store for anything new.
+        for r in storage.all("runs")[-(limit or 10):]:
+            seen.add(r["id"])
+            yield _frame(r)
+            sent += 1
+            if limit and sent >= limit:
+                return
+        deadline = asyncio.get_event_loop().time() + max_wait_seconds
+        while True:
+            for r in storage.all("runs"):
+                if r["id"] in seen:
+                    continue
+                seen.add(r["id"])
+                yield _frame(r)
+                sent += 1
+                if limit and sent >= limit:
+                    return
+            if asyncio.get_event_loop().time() > deadline:
+                return
+            await asyncio.sleep(poll_seconds)
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache",
+                                      "X-Accel-Buffering": "no"})
 
 
 @app.post("/api/runs/{run_id}/replay")
