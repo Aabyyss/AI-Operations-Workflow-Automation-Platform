@@ -90,6 +90,52 @@ def test_failure_schedules_retry(client, monkeypatch):
         server.shutdown()
 
 
+def test_dead_letter_then_retry(client, monkeypatch):
+    server = http.server.HTTPServer(("127.0.0.1", 0), _FAIL)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    monkeypatch.setattr(config, "OUTBOX_URL",
+                        f"http://127.0.0.1:{server.server_port}/hook")
+    try:
+        _queue_refund()
+        # Exhaust the retry budget: deliver, deliver, ... until dead.
+        for _ in range(outbound.MAX_ATTEMPTS):
+            outbound.deliver_pending()
+        rec = next(r for r in client.get("/api/outbox").json()
+                   if r["id"] == "out_test1")
+        assert rec["status"] == "dead"
+
+        # A dead record is no longer retried by the flusher...
+        summary = outbound.deliver_pending()
+        assert summary["attempted"] == 0
+
+        # ...until an operator resets it.
+        reset = client.post("/api/outbox/out_test1/retry")
+        assert reset.status_code == 200
+        assert reset.json()["status"] == "pending"
+        assert reset.json()["attempts"] == 0
+    finally:
+        server.shutdown()
+
+
+def test_retry_unknown_or_delivered_404(client):
+    assert client.post("/api/outbox/out_nope/retry").status_code == 404
+
+
+def test_delivered_records_are_not_resent(client, monkeypatch):
+    server = http.server.HTTPServer(("127.0.0.1", 0), _OK)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    monkeypatch.setattr(config, "OUTBOX_URL",
+                        f"http://127.0.0.1:{server.server_port}/hook")
+    try:
+        _queue_refund()
+        assert outbound.deliver_pending()["delivered"] == 1
+        # Second flush: nothing left to attempt — no duplicate vendor calls.
+        summary = outbound.deliver_pending()
+        assert summary["attempted"] == 0
+    finally:
+        server.shutdown()
+
+
 def test_view_folds_status_updates():
     _queue_refund()  # base record so the folded entry has kind/payload
     outbound.storage.append("outbox", {

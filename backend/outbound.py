@@ -30,21 +30,28 @@ BASE_DELAY_S = 2.0  # exponential: 2, 4, 8, 16 seconds
 
 
 def deliver_pending(max_items: int = 25) -> dict:
-    """Attempt delivery of pending outbox records. Returns a summary."""
+    """Attempt delivery of pending outbox records. Returns a summary.
+
+    Reads the *folded* view so state from earlier passes (delivered, dead)
+    is respected — the raw records are append-only and never change.
+    """
     if not config.OUTBOX_URL:
         return {"attempted": 0, "delivered": 0, "deferred": 0, "dead": 0,
                 "reason": "AIOPS_OUTBOX_URL not configured"}
 
-    pending = [o for o in storage.all("outbox") if o.get("status", "pending") == "pending"]
+    pending = [o for o in outbox_view()
+               if o.get("status", "pending") == "pending"]
     summary = {"attempted": 0, "delivered": 0, "deferred": 0, "dead": 0}
 
     for item in pending[:max_items]:
         summary["attempted"] += 1
-        ok = _attempt(item)
+        ok, attempts = _attempt(item)
         if ok:
             summary["delivered"] += 1
-        elif item.get("attempts", 1) >= MAX_ATTEMPTS:
+        elif attempts >= MAX_ATTEMPTS:
             summary["dead"] += 1
+            _set_outbox_status(item["id"], "dead", attempts=attempts,
+                               last_error="retry budget exhausted")
         else:
             summary["deferred"] += 1
     return summary
@@ -79,7 +86,7 @@ def _attempt(item: dict) -> bool:
                        attempts=attempts, last_error=error or None)
     audit_log("outbox_delivered" if delivered else "outbox_retry_scheduled",
               {"outbox_id": item["id"], "attempt": attempts, "status_code": status})
-    return delivered
+    return delivered, attempts
 
 
 def _set_outbox_status(outbox_id: str, status: str, attempts: int,
@@ -90,6 +97,26 @@ def _set_outbox_status(outbox_id: str, status: str, attempts: int,
         "id": outbox_id, "status_update": True, "status": status,
         "attempts": attempts, "last_error": last_error, "ts": iso_now(),
     })
+
+
+def retry(outbox_id: str) -> dict | None:
+    """Reset a dead or failing record to pending with a fresh budget.
+
+    Operational calm-after-the-storm tool: the vendor endpoint was down,
+    the queue filled with dead letters, the endpoint is back — reset and
+    flush. Deliberately audit-visible (a status update record, like every
+    other transition).
+    """
+    targets = [o for o in outbox_view()
+               if o["id"] == outbox_id and o.get("status") != "delivered"]
+    if not targets:
+        return None
+    _set_outbox_status(outbox_id, "pending", attempts=0, last_error=None)
+    return outbox_view_dict(outbox_id)
+
+
+def outbox_view_dict(outbox_id: str) -> dict | None:
+    return next((o for o in outbox_view() if o["id"] == outbox_id), None)
 
 
 def outbox_view() -> list[dict]:

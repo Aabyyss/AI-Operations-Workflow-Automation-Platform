@@ -427,6 +427,16 @@ def delivery_ledger(limit: int = 100) -> list[dict]:
     return storage.all("deliveries")[-limit:]
 
 
+@app.post("/api/outbox/{outbox_id}/retry")
+def retry_outbox(outbox_id: str) -> dict:
+    """Reset a dead/failing delivery to pending with a fresh retry budget."""
+    record = outbound.retry(outbox_id)
+    if record is None:
+        raise HTTPException(404, f"no retryable outbox record: {outbox_id}")
+    audit_log("outbox_retried", {"outbox_id": outbox_id})
+    return record
+
+
 @app.get("/api/analytics/summary")
 def analytics_summary() -> dict:
     usage = pd.DataFrame(storage.all("usage"))
