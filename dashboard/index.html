@@ -98,6 +98,7 @@
   </div>
 
   <div class="cards" id="kpis"></div>
+  <div id="health_strip"></div>
 
   <div class="row">
     <!-- Side A: process analysis -->
@@ -173,6 +174,34 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
     </div>
   </div>
 
+  <div class="row" style="margin-top:14px">
+    <div class="card">
+      <h2>Quality Gate</h2>
+      <div id="quality_out" class="muted">Loading…</div>
+    </div>
+    <div class="card">
+      <h2>A/B Cycle Time · AI vs manual</h2>
+      <div id="ab_out" class="muted">Loading…</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>Knowledge Base · RAG corpus</h2>
+    <div id="kb_list" class="muted">Loading…</div>
+    <details style="margin-top:10px">
+      <summary class="muted" style="cursor:pointer">Add or update a policy document</summary>
+      <label>Document name (e.g. “Refund Exceptions”)</label>
+      <input id="kb_name" placeholder="Refund Exceptions">
+      <label>Markdown — split sections with “## ” headings (that is how the retriever chunks)</label>
+      <textarea id="kb_markdown" placeholder="# Refund Exceptions\n\n## Duplicate charge\nApprove refunds for duplicate charges within 24 hours."></textarea>
+      <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+        <button onclick="saveKnowledge(false)">Create document</button>
+        <button class="ghost" onclick="saveKnowledge(true)">Overwrite existing</button>
+        <span id="kb_msg" class="muted"></span>
+      </div>
+    </details>
+  </div>
+
   <div class="card" style="margin-top:14px">
     <h2>Recent Ticket Runs</h2>
     <div id="runs_out" class="muted">No runs yet.</div>
@@ -226,7 +255,7 @@ function setTheme(mode) {
 
 async function loadAll() {
   try {
-    const [summary, reviews, usage, audit, runs, sla, perf, budget, drift] = await Promise.all([
+    const [summary, reviews, usage, audit, runs, sla, perf, budget, drift, health, quality, ab, knowledge] = await Promise.all([
       api("/api/analytics/summary"),
       api("/api/reviews"),
       api("/api/usage"),
@@ -236,6 +265,10 @@ async function loadAll() {
       api("/api/analytics/runs"),
       api("/api/analytics/budget").catch(() => null),
       api("/api/analytics/drift").catch(() => null),
+      api("/api/health").catch(() => null),
+      api("/api/analytics/quality").catch(() => null),
+      api("/api/analytics/ab").catch(() => null),
+      api("/api/knowledge").catch(() => null),
     ]);
     renderKpis(summary, sla, perf);
     renderCosts(usage);
@@ -245,7 +278,48 @@ async function loadAll() {
     renderRuns(runs);
     renderBudget(budget);
     renderDrift(drift);
+    renderHealth(health);
+    renderQuality(quality);
+    renderAB(ab);
+    renderKnowledge(knowledge);
   } catch (e) { console.error(e); }
+}
+
+function renderHealth(h) {
+  if (!h) { $("health_strip").innerHTML = '<div class="card"><span class="muted">Health report unavailable (older API?).</span></div>'; return; }
+  const cls = {ok: "auto", disabled: "pending", degraded: "review", error: "rejected"};
+  const chips = Object.entries(h.checks).map(([name, c]) =>
+    `<span class="pill ${cls[c.status] || "pending"}" title="${esc(name)}: ${esc(c.status)}">${esc(name)}${c.status !== "ok" ? " · " + esc(c.status) : ""}</span>`).join(" ");
+  const overall = h.status === "ok" ? '<span class="pill auto">healthy</span>' :
+    (h.status === "degraded" ? '<span class="pill review">degraded</span>' : '<span class="pill rejected">error</span>');
+  $("health_strip").innerHTML = `<div class="card"><div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">${overall}${chips}</div></div>`;
+}
+
+function renderQuality(q) {
+  if (!q) { $("quality_out").innerHTML = '<span class="muted">Quality metrics unavailable.</span>'; return; }
+  const fmt = (v, suffix) => v === null || v === undefined ? "—" : v + (suffix || "");
+  $("quality_out").innerHTML = `
+    <div style="display:flex; gap:22px; flex-wrap:wrap">
+      <div><div class="muted">Gate precision</div><div class="kpi">${fmt(q.gate_precision === null ? null : Math.round(q.gate_precision * 100))}<small>% escalations rejected</small></div></div>
+      <div><div class="muted">Recall proxy</div><div class="kpi">${fmt(q.gate_recall_proxy === null ? null : Math.round(q.gate_recall_proxy * 100))}<small>% auto-runs flagged</small></div></div>
+    </div>
+    <div class="muted" style="margin-top:8px">${q.escalations_decided} decided (${q.reviewer_approved} approved / ${q.reviewer_rejected} rejected) · ${q.escalations_pending} pending · ${q.auto_resolved_total} auto-resolved, ${q.flagged_by_feedback} flagged by feedback</div>
+    <div class="muted" style="margin-top:4px">${esc(q.note)}</div>`;
+}
+
+function renderAB(a) {
+  if (!a) { $("ab_out").innerHTML = '<span class="muted">A/B metrics unavailable.</span>'; return; }
+  const sec = (s) => s === null || s === undefined ? "—" : (s >= 90 ? Math.round(s / 60) + "m " + Math.round(s % 60) + "s" : Math.round(s) + "s");
+  if (!a.sample_sufficient) {
+    $("ab_out").innerHTML = `<span class="muted">Need ≥ ${a.min_cohort_size} timed tickets per cohort before a delta is meaningful.\n      ai_assisted: ${a.ai_assisted.count} · manual: ${a.manual.count}.</span>`;
+    return;
+  }
+  $("ab_out").innerHTML = `
+    <div style="display:flex; gap:22px; flex-wrap:wrap">
+      <div><div class="muted">AI-assisted median</div><div class="kpi">${sec(a.ai_assisted.median_seconds)}<small>p90 ${sec(a.ai_assisted.p90_seconds)}</small></div></div>
+      <div><div class="muted">Manual median</div><div class="kpi">${sec(a.manual.median_seconds)}<small>p90 ${sec(a.manual.p90_seconds)}</small></div></div>
+    </div>
+    <div style="margin-top:8px" class="good">AI path ~${a.ai_faster_pct}% faster on median cycle time (${sec(a.median_delta_seconds)} saved per ticket)</div>`;
 }
 
 function renderKpis(s, sla, perf) {
@@ -332,6 +406,38 @@ function renderAudit(events) {
 
 let lastRuns = [];
 
+async function renderKnowledge(docs) {
+  if (!docs) { $("kb_list").innerHTML = '<span class="muted">Knowledge list unavailable.</span>'; return; }
+  $("kb_list").innerHTML = docs.length ? `<table><thead><tr><th>Document</th><th>Chunks</th><th>Updated</th><th></th></tr></thead><tbody>
+    ${docs.map(d => `<tr><td><b>${esc(d.doc_id)}</b> <span class="muted">${esc(d.title || "")}</span></td><td>${d.chunks}</td><td class="muted">${esc((d.modified_at || "").slice(0, 16).replace("T", " "))}</td>
+      <td><button class="reject" onclick="deleteKnowledge('${esc(d.doc_id)}')">Delete</button></td></tr>`).join("")}
+    </tbody></table>
+    <div class="muted" style="margin-top:6px">The retriever serves changes immediately — the next ticket drafts against the new policy.</div>`
+    : '<span class="muted">Corpus empty — add a policy document below.</span>';
+}
+
+async function saveKnowledge(overwrite) {
+  const name = $("kb_name").value.trim();
+  const markdown = $("kb_markdown").value;
+  if (!name || !markdown.trim()) { $("kb_msg").textContent = "Name and markdown are both required."; return; }
+  try {
+    const r = await api("/api/knowledge", {method: "POST", body: JSON.stringify({name, markdown, overwrite})});
+    $("kb_msg").textContent = `${r.created ? "Created" : "Updated"} ${r.doc_id} · ${r.chunks} chunks · index now ${r.index_chunks}.`;
+    $("kb_name").value = ""; $("kb_markdown").value = "";
+    renderKnowledge(await api("/api/knowledge"));
+  } catch (e) {
+    $("kb_msg").textContent = (e.message || String(e)).includes("409") ? "Already exists — use Overwrite." : (e.message || String(e));
+  }
+}
+
+async function deleteKnowledge(docId) {
+  if (!confirm(`Delete knowledge document '${docId}'? The retriever drops it immediately.`)) return;
+  try {
+    await api(`/api/knowledge/${encodeURIComponent(docId)}`, {method: "DELETE"});
+    renderKnowledge(await api("/api/knowledge"));
+  } catch (e) { alert(e.message || String(e)); }
+}
+
 function renderRuns(tickets) {
   if (!tickets.length) { $("runs_out").innerHTML = '<span class="muted">No runs yet.</span>'; return; }
   lastRuns = tickets;
@@ -404,6 +510,7 @@ async function designWorkflow(processId) {
       <div class="muted" style="margin-top:4px">${d.node_count} nodes · intake webhook → agentic pipeline → risk-gated escalation, hourly monitoring digest, AI-mapping note embedded.</div>
       <div style="margin-top:8px"><a href="/api/workflows/${d.id}/download" download="workflow.json"><button class="ghost">Download JSON for n8n import</button></a></div>`;
   } catch(e) { $("design_out").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+}
 
 async function submitTicket() {
   $("ticket_out").innerHTML = '<span class="muted">Running pipeline…</span>';
