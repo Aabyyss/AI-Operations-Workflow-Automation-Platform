@@ -516,6 +516,73 @@ def reload_knowledge() -> dict:
     return {"chunks": n}
 
 
+# --------------------------------------------------- knowledge management
+
+
+class KnowledgeDoc(BaseModel):
+    name: str
+    markdown: str
+    overwrite: bool = False
+
+
+@app.get("/api/knowledge")
+def list_knowledge() -> list[dict]:
+    """Every policy document: id, title, chunk count, size, last modified."""
+    from .knowledge import list_documents
+
+    return list_documents()
+
+
+@app.get("/api/knowledge/{doc_id}")
+def get_knowledge(doc_id: str) -> dict:
+    from .knowledge import read_document
+
+    try:
+        doc = read_document(doc_id)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if doc is None:
+        raise HTTPException(404, f"document not found: {doc_id}")
+    return doc
+
+
+@app.post("/api/knowledge", status_code=201)
+def save_knowledge(doc: KnowledgeDoc) -> dict:
+    """Create or update a policy document, then rebuild the RAG index.
+
+    The pipeline retrieves from this corpus on the very next ticket —
+    no redeploy, no restart. Overwriting an existing document requires
+    an explicit overwrite=true.
+    """
+    from . import knowledge
+
+    try:
+        result = knowledge.save_document(doc.name, doc.markdown, doc.overwrite)
+    except knowledge.DocumentExistsError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    n = retriever.reload()
+    audit_log("knowledge_saved", {"doc_id": result["doc_id"],
+                                   "created": result["created"], "chunks": n})
+    return {**result, "index_chunks": n}
+
+
+@app.delete("/api/knowledge/{doc_id}")
+def delete_knowledge(doc_id: str) -> dict:
+    from . import knowledge
+
+    try:
+        removed = knowledge.delete_document(doc_id)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if not removed:
+        raise HTTPException(404, f"document not found: {doc_id}")
+    n = retriever.reload()
+    audit_log("knowledge_deleted", {"doc_id": doc_id, "chunks": n})
+    return {"deleted": doc_id, "index_chunks": n}
+
+
 # --------------------------------------------------------------- feedback
 @app.post("/api/runs/{run_id}/feedback", status_code=201)
 def submit_feedback(run_id: str, fb: Feedback) -> dict:
