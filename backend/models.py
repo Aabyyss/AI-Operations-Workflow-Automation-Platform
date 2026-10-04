@@ -125,6 +125,10 @@ class Ticket(BaseModel):
     subject: str
     body: str
     channel: Literal["email", "web", "slack"] = "email"
+    # Wall-clock seconds the ticket took from arrival to resolution as
+    # stamped by the submitting system (n8n). Optional; feeds the A/B
+    # cycle-time report for the ai_assisted cohort.
+    cycle_seconds: float | None = Field(default=None, gt=0)
 
 
 class IntakeResult(BaseModel):
@@ -201,6 +205,7 @@ class PipelineResult(BaseModel):
     trace: list[AgentTrace] = Field(default_factory=list)
     total_cost_usd: float = 0.0
     total_latency_ms: float = 0.0
+    cycle_seconds: float | None = None
     error: str | None = None
 
 

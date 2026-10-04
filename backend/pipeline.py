@@ -318,6 +318,7 @@ def run_pipeline(ticket: Ticket) -> PipelineResult:
     result.trace = trace
     result.total_cost_usd = round(sum(u.cost_usd for u in usage_log), 6)
     result.total_latency_ms = round(sum(t.duration_ms for t in trace), 3)
+    result.cycle_seconds = ticket.cycle_seconds
     for u in usage_log:
         store.append("usage", u.model_dump())
     store.append("runs", result.model_dump())

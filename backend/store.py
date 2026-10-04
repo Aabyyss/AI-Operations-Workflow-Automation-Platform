@@ -30,6 +30,7 @@ class Storage:
             "workflows": config.DATA_DIR / "workflows.json",
             "feedback": config.DATA_DIR / "feedback.json",
             "deliveries": config.DATA_DIR / "deliveries.json",
+            "cycle_times": config.DATA_DIR / "cycle_times.json",
         }
 
     def _load(self, name: str) -> list[dict[str, Any]]:

@@ -586,6 +586,47 @@ def delete_knowledge(doc_id: str) -> dict:
     return {"deleted": doc_id, "index_chunks": n}
 
 
+# --------------------------------------------------------------- A/B cycle time
+
+
+class ManualCycleRecord(BaseModel):
+    """One manually-handled ticket, stamped by whoever tracked it."""
+    ticket_id: str | None = None
+    label: str = ""  # what made this ticket comparable, e.g. 'duplicate charge'
+    cycle_seconds: float
+
+
+@app.post("/api/analytics/ab/records", status_code=201)
+def record_manual_cycle(rec: ManualCycleRecord) -> dict:
+    """Stamp a cycle time for the manual cohort (human handled it, no AI)."""
+    from .ab_testing import COHORTS
+
+    if rec.cycle_seconds <= 0:
+        raise HTTPException(422, "cycle_seconds must be positive")
+    record = rec.model_dump()
+    record["id"] = f"cyc_{len(storage.all('cycle_times')) + 1}"
+    record["cohort"] = "manual"
+    record["recorded_at"] = iso_now()
+    storage.append("cycle_times", record)
+    audit_log("cycle_time_recorded", {"cohort": "manual",
+                                       "cycle_seconds": rec.cycle_seconds})
+    return record
+
+
+@app.get("/api/analytics/ab")
+def ab_cycle_time() -> dict:
+    """AI-assisted vs manual cycle time — measured, not estimated.
+
+    The ai_assisted cohort reads cycle_seconds stamped on pipeline runs
+    by the submitting system; the manual cohort is what operators record.
+    Below the minimum cohort size the report says 'not yet' instead of
+    inventing a percentage.
+    """
+    from .ab_testing import ab_report
+
+    return ab_report(storage.all("runs"), storage.all("cycle_times"))
+
+
 # --------------------------------------------------------------- feedback
 @app.post("/api/runs/{run_id}/feedback", status_code=201)
 def submit_feedback(run_id: str, fb: Feedback) -> dict:
