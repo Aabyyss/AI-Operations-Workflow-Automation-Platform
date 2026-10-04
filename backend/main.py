@@ -613,6 +613,20 @@ def record_manual_cycle(rec: ManualCycleRecord) -> dict:
     return record
 
 
+@app.get("/api/analytics/quality")
+def quality_gate_metrics() -> dict:
+    """How often is the human-in-the-loop gate right?
+
+    Precision comes from review decisions (rejected escalations / decided
+    escalations); the recall proxy counts auto-resolved runs that later
+    drew thumbs-down feedback — escalations that should have happened.
+    """
+    from .quality_gate import gate_quality
+
+    return gate_quality(storage.all("reviews"), storage.all("runs"),
+                        storage.all("feedback"))
+
+
 @app.get("/api/analytics/ab")
 def ab_cycle_time() -> dict:
     """AI-assisted vs manual cycle time — measured, not estimated.
