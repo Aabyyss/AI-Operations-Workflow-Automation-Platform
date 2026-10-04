@@ -70,6 +70,10 @@ class Storage:
                     return item
         return None
 
+    def collection_names(self) -> list[str]:
+        """Public view of the managed collections (health, backup, docs)."""
+        return sorted(self._paths)
+
     def replace_all(self, name: str, items: list[dict[str, Any]]) -> None:
         """Atomically swap a collection (used by retention pruning)."""
         with _lock:

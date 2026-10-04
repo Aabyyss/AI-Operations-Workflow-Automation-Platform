@@ -576,6 +576,20 @@ def health() -> dict:
     return {"status": "ok", "mode": config.MODE}
 
 
+@app.get("/api/health")
+def api_health() -> dict:
+    """Component health: what the operator actually asks at 2am.
+
+    /health answers liveness and /ready answers routability; this one
+    answers "which part is misbehaving?" — storage, knowledge corpus,
+    approval backlog, outbound delivery, LLM gateway, budget posture —
+    with a machine-readable status per component.
+    """
+    from .health import health_report
+
+    return health_report()
+
+
 def _ready_body() -> dict:
     """Pure readiness checks — no HTTP concerns."""
     checks: dict = {}
