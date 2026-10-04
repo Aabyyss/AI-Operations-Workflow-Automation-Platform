@@ -46,6 +46,11 @@ API_BASE_URL = os.getenv("AIOPS_API_BASE_URL", "http://api:8000")
 # Security: when set, every API request must present this key (X-API-Key or
 # Authorization: Bearer). Unset = open API, the right default for local dev.
 API_KEY = os.getenv("AIOPS_API_KEY", "")
+# Role-scoped keys below the master key: an approver may read everything and
+# decide reviews; an admin may run admin mutations (prune, reload, templating)
+# but not approve refunds. Unset = role unused, master key stays the only path.
+APPROVER_KEY = os.getenv("AIOPS_APPROVER_KEY", "")
+ADMIN_KEY = os.getenv("AIOPS_ADMIN_KEY", "")
 # Shared secret used to verify HMAC-SHA256 signatures on the n8n intake
 # webhook. Unset = signatures are accepted but not enforced.
 WEBHOOK_SECRET = os.getenv("AIOPS_WEBHOOK_SECRET", "")

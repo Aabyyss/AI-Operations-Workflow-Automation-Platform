@@ -8,12 +8,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                Response, StreamingResponse)
 from pydantic import BaseModel
 
 from . import config, designer, exports, metrics, outbound, pipeline, ratelimit, reqlog, security, store
+from .security import require_admin, require_approver
 from .analytics import approval_sla_metrics
 from .budget import budget_status
 from .drift import drift_report
@@ -316,7 +317,8 @@ def list_reviews(status: str | None = None) -> list[dict]:
 
 
 @app.post("/api/reviews/{review_id}/decision")
-def decide_review(review_id: str, decision: ReviewDecision) -> dict:
+def decide_review(review_id: str, decision: ReviewDecision,
+                  _role: str = Depends(require_approver)) -> dict:
     review = storage.get("reviews", review_id)
     if not review:
         raise HTTPException(404, "review not found")
@@ -492,7 +494,8 @@ def analytics_summary() -> dict:
 
 
 @app.post("/api/admin/prune")
-def prune_collections(confirm: bool = False) -> dict:
+def prune_collections(confirm: bool = False,
+                      _role: str = Depends(require_admin)) -> dict:
     """Apply retention policy (dry-run by default; confirm=true to execute)."""
     from .models import iso_now
 
