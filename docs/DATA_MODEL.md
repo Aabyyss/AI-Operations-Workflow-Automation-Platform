@@ -3,8 +3,12 @@
 The platform persists to `data/*.json` through one swappable `Storage`
 class (`backend/store.py`): append-only lists per collection, one
 `threading.Lock` around read-modify-write, `replace_all` for atomic
-prunes. Swapping this file for SQLAlchemy + Postgres is the planned
-milestone — no agent, route, or dashboard change should be needed.
+prunes. **Postgres is now the shipped alternative backend** —
+`AIOPS_STORAGE=postgres` swaps every collection to one JSONB `documents`
+table (`seq`, `collection`, `payload`) behind the identical seven-method
+interface; ids, shapes and retention behavior are unchanged
+([operations → storage backends](OPERATIONS.md)). JSON stays the
+default: the demo, tests and CI never need a database.
 
 ## Collections
 

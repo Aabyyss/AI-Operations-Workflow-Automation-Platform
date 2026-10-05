@@ -55,6 +55,7 @@ in one working system.
 | 28 | A/B cycle-time analytics | ✅ | `GET /api/analytics/ab` cohorts with honest 5-sample floor; manual records over `POST /api/analytics/ab/records` |
 | 29 | Quality-gate metrics | ✅ | `GET /api/analytics/quality` — precision from review outcomes, recall proxy from feedback |
 | 30 | Desktop launcher + shortcut (Windows) | ✅ | `scripts/launch_aiops.cmd` on :8200, single-instance guard, Desktop `.lnk` installer |
+| 31 | Postgres storage backend (opt-in) | ✅ | same `Storage` interface on one JSONB `documents` table; `AIOPS_STORAGE=postgres`, pgvector compose profile, verified migration script, 14 offline contract tests |
 
 ## 3. Development roadmap (phases)
 
@@ -73,8 +74,10 @@ Phases 1–8 are complete; the roadmap items below extend the same skeleton.
 
 ## 4. Backlog (post-v1)
 
-- **Postgres + pgvector** — swap JSON store for real DB behind `Storage`;
-  embeddings table for live-mode retrieval.
+- **Postgres + pgvector** — ✅ shipped (opt-in): JSONB `documents` table
+  behind the same `Storage` interface, pgvector-ready schema, compose
+  profile and verified migration script. The retriever's pgvector
+  cutover remains the documented one-file extension point.
 - **Outbound n8n executor** — poll outbox, execute against real Gmail/Slack/HubSpot
   APIs, replay-safe dry-run mode.
 - **Evaluation harness** — ✅ shipped: labeled set with routing accuracy,

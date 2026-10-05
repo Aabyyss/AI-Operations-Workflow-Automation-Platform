@@ -99,6 +99,11 @@ For shared deployments, set the opt-in protections from `.env.example`:
 `AIOPS_RATE_LIMIT` (per-IP limiter), `AIOPS_REQUEST_LOG_FILE` (structured
 logs). Backups: `python -m scripts.backup --retention 14`.
 
+Prefer a real database? `docker compose --profile postgres up` +
+`AIOPS_STORAGE=postgres` runs the identical API on Postgres/JSONB with a
+pgvector-ready schema (`python -m scripts.migrate_to_postgres --replace
+--verify` moves your JSON data over).
+
 ### The learning loop (v1.3.0)
 
 The platform can be questioned, not just watched:
@@ -157,6 +162,6 @@ The questions an operator asks at 2am, answered in code:
 
 - [x] Quality-gate precision/recall from review outcomes (v1.4.0)
 - [x] Per-process A/B: AI-assisted vs manual cycle-time tracking (v1.4.0)
-- [ ] Postgres + pgvector behind the same `Storage` interface
+- [x] Postgres + pgvector behind the same `Storage` interface (opt-in)
+- [x] Admin-gated knowledge mutations for shared deployments
 - [ ] n8n outbound poller executing the outbox against real vendor APIs
-- [ ] Admin-gated knowledge mutations for shared deployments

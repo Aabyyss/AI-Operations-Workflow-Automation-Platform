@@ -54,6 +54,28 @@ data/
   nothing else in the codebase touches persistence directly.
 - Every collection's writer, shape and retention cap: [DATA_MODEL.md](DATA_MODEL.md).
 
+### 2.1 Storage backends: JSON (default) or Postgres
+
+JSON files need nothing and remain the default. For shared or
+production deployments, the same `Storage` interface runs on
+Postgres/JSONB — no agent, route or dashboard changes:
+
+```bash
+pip install -r requirements-postgres.txt
+export AIOPS_STORAGE=postgres
+export AIOPS_DATABASE_URL=postgresql://aiops:aiops@localhost:5432/aiops
+python -m scripts.migrate_to_postgres --replace --verify   # one-shot copy + count check
+```
+
+`docker compose --profile postgres up` provisions a pgvector-ready
+instance (`pgvector/pgvector:pg16`); the API image already ships the
+driver and the migrator. Schema bootstrap also creates the pgvector
+extension and an `embeddings` table so live-mode retrieval can cut over
+without another migration — the retriever swap itself remains the
+one-file extension point (`rag.py`). Swapping back to JSON is the same
+two env vars. `/api/health` reports the backend's record counts either
+way.
+
 ## 3. Running the API
 
 ```bash
