@@ -77,6 +77,19 @@
   .bar{height:8px; background:var(--panel2); border-radius:99px; overflow:hidden; margin-top:6px}
   .bar>i{display:block; height:100%; background:var(--accent)}
   .bar>i.g{background:var(--good)} .bar>i.w{background:var(--warn)}
+  code{background:var(--panel2); border:1px solid var(--line); border-radius:6px;
+       padding:1px 6px; font:12px/1.5 ui-monospace,Consolas,monospace}
+  td, .card, .pill{overflow-wrap:anywhere}
+  /* Audit event lines: structured, wrap-safe, never clipped mid-token */
+  .ev{display:flex; gap:8px; align-items:baseline; padding:5px 8px; margin:2px 0;
+      border-radius:8px; overflow-wrap:anywhere}
+  .ev:hover{background:var(--panel2)}
+  .ev time{color:var(--muted); font:12px/1.6 ui-monospace,Consolas,monospace; flex:none}
+  .ev .ev-name{font-weight:600; font-size:12.5px; flex:none}
+  .ev .ev-payload{color:var(--muted); font-size:12.5px; min-width:0}
+  .ev .ev-payload b{color:var(--text); font-weight:600}
+  .ev-good{color:var(--good)} .ev-warn{color:var(--warn)}
+  .ev-bad{color:var(--bad)} .ev-info{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -364,11 +377,14 @@ function renderDrift(d) {
 
 function renderCosts(usage) {
   const by = {};
-  usage.forEach(u => { by[u.agent] = (by[u.agent]||0) + u.cost_usd; });
-  const rows = Object.entries(by).sort((a,b)=>b[1]-a[1]);
+  usage.forEach(u => {
+    const a = (by[u.agent] = by[u.agent] || {calls: 0, tin: 0, tout: 0, cost: 0});
+    a.calls++; a.tin += u.tokens_in || 0; a.tout += u.tokens_out || 0; a.cost += u.cost_usd || 0;
+  });
+  const rows = Object.entries(by).sort((a,b)=>b[1].cost-a[1].cost);
   $("cost_tbl").querySelector("tbody").innerHTML = rows.length ? rows.map(([a,c]) =>
-    `<tr><td>${esc(a)}</td><td>${money(c)}</td></tr>`).join("")
-    : `<tr><td colspan="2" class="muted">No usage recorded yet</td></tr>`;
+    `<tr><td>${esc(a)}</td><td>${c.calls}</td><td>${c.tin.toLocaleString()} / ${c.tout.toLocaleString()}</td><td>${money(c.cost)}</td></tr>`).join("")
+    : `<tr><td colspan="4" class="muted">No usage recorded yet</td></tr>`;
 }
 
 function renderDispositions(s) {
@@ -398,10 +414,36 @@ function renderReviews(reviews) {
     </div>`).join("");
 }
 
+const EV_TONE = {auto_resolved:"ev-good", batch_submitted:"ev-good",
+  escalated_to_human:"ev-warn", review_decided:"ev-warn", refund_queued:"ev-warn",
+  knowledge_deleted:"ev-warn", retention_pruned:"ev-bad", feedback_recorded:"ev-info",
+  actions_executed:"ev-info", knowledge_saved:"ev-info", knowledge_reloaded:"ev-info"};
+
+// Truncate with a real ellipsis (never mid-glyph slicing), full text kept in title tooltips.
+function truncate(v, n) {
+  const s = String(v ?? "");
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+// Payload as readable key/value pairs — not a raw JSON dump sliced mid-word.
+function fmtPayload(p) {
+  if (p === null || p === undefined) return "";
+  if (typeof p !== "object") return esc(truncate(p, 90));
+  return Object.entries(p).map(([k, v]) => {
+    const val = (v && typeof v === "object") ? JSON.stringify(v) : v;
+    return `<b>${esc(k)}</b> ${esc(truncate(val, 46))}`;
+  }).join(" · ");
+}
+
 function renderAudit(events) {
-  $("audit_out").innerHTML = events.length ? events.slice().reverse().map(e =>
-    `<div style="margin:3px 0"><span class="muted">${esc((e.ts||"").slice(11,19))}</span> <b>${esc(e.event)}</b> <span class="muted">${esc(JSON.stringify(e.payload).slice(0,110))}</span></div>`
-  ).join("") : "No events yet.";
+  $("audit_out").innerHTML = events.length ? events.slice().reverse().map(e => {
+    const tone = EV_TONE[e.event] || "ev-info";
+    return `<div class="ev" title="${esc(JSON.stringify(e.payload))}">
+      <time>${esc((e.ts||"").slice(11,19))}</time>
+      <span class="ev-name ${tone}">${esc(e.event)}</span>
+      <span class="ev-payload">${fmtPayload(e.payload)}</span>
+    </div>`;
+  }).join("") : "No events yet.";
 }
 
 let lastRuns = [];
@@ -530,7 +572,7 @@ async function demoTicket() {
 
 function renderRun(r) {
   const pills = {auto_resolved:"auto", human_review:"review", approved_executed:"approved", rejected:"rejected", failed:"rejected"};
-  const steps = (r.trace||[]).map(t => `<tr><td>${esc(t.agent)}</td><td>${t.duration_ms} ms</td><td>${esc(t.output_summary.slice(0,90))}</td></tr>`).join("");
+  const steps = (r.trace||[]).map(t => `<tr><td>${esc(t.agent)}</td><td>${t.duration_ms} ms</td><td>${esc(truncate(t.output_summary, 90))}</td></tr>`).join("");
   $("ticket_out").innerHTML = `
     <div class="pill ${pills[r.disposition]||"pending"}">${r.disposition}</div>
     ${r.review_id ? `<span class="muted"> review ${esc(r.review_id)} queued</span>` : ""}
