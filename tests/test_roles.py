@@ -73,6 +73,27 @@ def test_approver_cannot_prune(scoped_client):
     assert r.status_code == 403
 
 
+def test_approver_reads_but_cannot_write_knowledge(scoped_client):
+    """Corpus writes shape what the AI tells customers — admin-level mutations."""
+    assert scoped_client.get("/api/knowledge", headers=_key(scoped_client, "approver-key")).status_code == 200
+    r = scoped_client.post("/api/knowledge", json={"name": "doc-x", "markdown": "# A\n\n## s\nbody text here\n"},
+                           headers=_key(scoped_client, "approver-key"))
+    assert r.status_code == 403
+    assert "requires role" in r.json()["detail"]
+    r = scoped_client.delete("/api/knowledge/refund_policy", headers=_key(scoped_client, "approver-key"))
+    assert r.status_code == 403
+
+
+def test_admin_can_write_knowledge_but_cannot_decide_reviews(scoped_client):
+    """The asymmetry works both ways: admin edits policy, approver decides cases."""
+    r = scoped_client.post("/api/knowledge", json={"name": "doc-x", "markdown": "# A\n\n## s\nbody text here\n"},
+                           headers=_key(scoped_client, "admin-key"))
+    assert r.status_code == 201
+    assert r.json()["created"] is True
+    r = scoped_client.delete("/api/knowledge/doc-x", headers=_key(scoped_client, "admin-key"))
+    assert r.status_code == 200
+
+
 def test_admin_runs_prune_dry_run(scoped_client):
     r = scoped_client.post("/api/admin/prune", headers=_key(scoped_client, "admin-key"))
     assert r.status_code == 200

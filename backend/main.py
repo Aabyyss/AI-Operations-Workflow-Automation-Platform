@@ -550,12 +550,17 @@ def get_knowledge(doc_id: str) -> dict:
 
 
 @app.post("/api/knowledge", status_code=201)
-def save_knowledge(doc: KnowledgeDoc) -> dict:
+def save_knowledge(doc: KnowledgeDoc,
+                   _role: str = Depends(require_admin)) -> dict:
     """Create or update a policy document, then rebuild the RAG index.
 
     The pipeline retrieves from this corpus on the very next ticket —
     no redeploy, no restart. Overwriting an existing document requires
     an explicit overwrite=true.
+
+    Corpus writes shape what the AI tells customers, so they are an
+    admin mutation: operator or admin key required (reads stay open to
+    every valid role).
     """
     from . import knowledge
 
@@ -572,7 +577,8 @@ def save_knowledge(doc: KnowledgeDoc) -> dict:
 
 
 @app.delete("/api/knowledge/{doc_id}")
-def delete_knowledge(doc_id: str) -> dict:
+def delete_knowledge(doc_id: str,
+                     _role: str = Depends(require_admin)) -> dict:
     from . import knowledge
 
     try:
