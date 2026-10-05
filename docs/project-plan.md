@@ -49,6 +49,12 @@ in one working system.
 | 22 | Model routing (light/heavy tiers) | ✅ | usage records show tier per agent; inert until `AIOPS_LIGHT/HEAVY_MODEL` set |
 | 23 | Budget guardrails + drift canary + retention | ✅ | `/api/analytics/budget`, `/api/analytics/drift`, `POST /api/admin/prune` |
 | 24 | Dashboard: learning loop + theme toggle | ✅ | satisfaction KPI, budget meter, drift panel, per-run feedback/replay buttons |
+| 25 | Component health report | ✅ | `GET /api/health` per-component status (storage → budget), dashboard health strip |
+| 26 | Knowledge-base management API | ✅ | `POST /api/knowledge` CRUD, traversal-proof slugs, explicit overwrite, auto-reload; dashboard corpus manager |
+| 27 | Role-scoped API keys | ✅ | approver decides reviews, admin prunes; scoped route deps, 10 tests in `test_roles.py` |
+| 28 | A/B cycle-time analytics | ✅ | `GET /api/analytics/ab` cohorts with honest 5-sample floor; manual records over `POST /api/analytics/ab/records` |
+| 29 | Quality-gate metrics | ✅ | `GET /api/analytics/quality` — precision from review outcomes, recall proxy from feedback |
+| 30 | Desktop launcher + shortcut (Windows) | ✅ | `scripts/launch_aiops.cmd` on :8200, single-instance guard, Desktop `.lnk` installer |
 
 ## 3. Development roadmap (phases)
 
@@ -74,9 +80,12 @@ Phases 1–8 are complete; the roadmap items below extend the same skeleton.
 - **Evaluation harness** — ✅ shipped: labeled set with routing accuracy,
   escalation recall, cost per ticket; runs in CI as a regression gate.
   Extend the label set as new ticket families appear.
-- **A/B cycle-time tracking** — tag tickets AI-assisted vs manual, compare
-  resolution time in analytics.
-- **Auth + roles** — operator vs approver vs admin for the dashboard.
+- **A/B cycle-time tracking** — ✅ shipped (v1.4.0): cohort records over the
+  API, distributions and deltas withheld until 5 samples per cohort.
+- **Auth + roles** — ✅ shipped (v1.4.0): role-scoped keys — operator
+  (master), approver (decisions), admin (prune).
+- **Finer knowledge-scoping** — gate corpus mutations behind the admin
+  role in shared deployments (today they sit behind the base auth gate).
 
 ## 5. Risks and mitigations
 
