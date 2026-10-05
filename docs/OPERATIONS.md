@@ -163,9 +163,11 @@ change fails CI instead of silently breaking a scheduled refresh.
 | `GET /api/analytics/quality` | gate precision (rejected / decided escalations) + recall proxy from thumbs-down auto-resolutions |
 
 **Role scoping.** Review decisions require the operator or approver key;
-`/api/admin/prune` requires the operator or admin key; every other route
-(including knowledge CRUD) accepts any configured role. With auth
-disabled everything stays open — local dev is unchanged.
+`/api/admin/prune` and knowledge mutations (`POST`/`DELETE /api/knowledge`)
+require the operator or admin key — corpus writes shape what the AI tells
+customers, so they are admin-level. Every other route accepts any
+configured role. With auth disabled everything stays open — local dev is
+unchanged.
 
 ## 6. Troubleshooting
 

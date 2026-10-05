@@ -84,8 +84,8 @@ Phases 1–8 are complete; the roadmap items below extend the same skeleton.
   API, distributions and deltas withheld until 5 samples per cohort.
 - **Auth + roles** — ✅ shipped (v1.4.0): role-scoped keys — operator
   (master), approver (decisions), admin (prune).
-- **Finer knowledge-scoping** — gate corpus mutations behind the admin
-  role in shared deployments (today they sit behind the base auth gate).
+- **Finer knowledge-scoping** — ✅ shipped: corpus mutations now require
+  the operator or admin key (v1.4.x).
 
 ## 5. Risks and mitigations
 
