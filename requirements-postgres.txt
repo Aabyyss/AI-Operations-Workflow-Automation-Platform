@@ -1,0 +1,3 @@
+# Optional: Postgres storage backend (AIOPS_STORAGE=postgres).
+# The core platform does not need this — JSON files remain the default.
+psycopg[binary]>=3.1

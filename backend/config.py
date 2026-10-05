@@ -17,6 +17,18 @@ KNOWLEDGE_DIR = PROJECT_ROOT / "knowledge_base"
 DATA_DIR.mkdir(exist_ok=True)
 
 # ---------------------------------------------------------------------------
+# Storage backend
+#
+# "json"     : zero-config JSON files under DATA_DIR (default — the demo,
+#              tests and CI never need a database).
+# "postgres" : the same Storage interface over Postgres/JSONB with a
+#              pgvector-ready schema. Requires AIOPS_DATABASE_URL and the
+#              optional driver: pip install -r requirements-postgres.txt
+# ---------------------------------------------------------------------------
+STORAGE_BACKEND = os.getenv("AIOPS_STORAGE", "json").strip().lower()
+DATABASE_URL = os.getenv("AIOPS_DATABASE_URL", "")
+
+# ---------------------------------------------------------------------------
 # Runtime mode
 #
 # "mock"  : deterministic, zero-API-key, rule-based pipeline (default).
@@ -47,8 +59,9 @@ API_BASE_URL = os.getenv("AIOPS_API_BASE_URL", "http://api:8000")
 # Authorization: Bearer). Unset = open API, the right default for local dev.
 API_KEY = os.getenv("AIOPS_API_KEY", "")
 # Role-scoped keys below the master key: an approver may read everything and
-# decide reviews; an admin may run admin mutations (prune, reload, templating)
-# but not approve refunds. Unset = role unused, master key stays the only path.
+# decide reviews; an admin may run admin mutations (prune, knowledge-corpus
+# writes) but not approve refunds. Unset = role unused, master key stays the
+# only path.
 APPROVER_KEY = os.getenv("AIOPS_APPROVER_KEY", "")
 ADMIN_KEY = os.getenv("AIOPS_ADMIN_KEY", "")
 # Shared secret used to verify HMAC-SHA256 signatures on the n8n intake

@@ -15,23 +15,18 @@ from . import config
 
 _lock = threading.Lock()
 
+# The canonical managed collections, in one place so every backend
+# (JSON files, Postgres) exposes the same names to health, backup and docs.
+COLLECTION_NAMES = ("analyses", "tickets", "runs", "reviews", "usage",
+                    "audit", "outbox", "workflows", "feedback",
+                    "deliveries", "cycle_times")
+
 
 class Storage:
     def __init__(self) -> None:
         config.DATA_DIR.mkdir(parents=True, exist_ok=True)
-        self._paths = {
-            "analyses": config.DATA_DIR / "analyses.json",
-            "tickets": config.DATA_DIR / "tickets.json",
-            "runs": config.DATA_DIR / "runs.json",
-            "reviews": config.DATA_DIR / "reviews.json",
-            "usage": config.DATA_DIR / "usage.json",
-            "audit": config.DATA_DIR / "audit.json",
-            "outbox": config.DATA_DIR / "outbox.json",
-            "workflows": config.DATA_DIR / "workflows.json",
-            "feedback": config.DATA_DIR / "feedback.json",
-            "deliveries": config.DATA_DIR / "deliveries.json",
-            "cycle_times": config.DATA_DIR / "cycle_times.json",
-        }
+        self._paths = {name: config.DATA_DIR / f"{name}.json"
+                       for name in COLLECTION_NAMES}
 
     def _load(self, name: str) -> list[dict[str, Any]]:
         path = self._paths[name]
@@ -81,7 +76,28 @@ class Storage:
             self._save(name, items)
 
 
-storage = Storage()
+def build_storage():
+    """Pick the configured backend: JSON files (default) or Postgres.
+
+    Postgres is a deliberate opt-in: AIOPS_STORAGE=postgres + a DSN. The
+    driver check happens at boot with a readable error, but the connection
+    itself is lazy — nothing dials the network until the first query.
+    """
+    if config.STORAGE_BACKEND == "postgres":
+        if not config.DATABASE_URL:
+            raise RuntimeError("AIOPS_STORAGE=postgres requires AIOPS_DATABASE_URL")
+        try:
+            import psycopg  # noqa: F401
+        except ImportError as exc:
+            raise RuntimeError(
+                "AIOPS_STORAGE=postgres requires the psycopg driver: "
+                "pip install -r requirements-postgres.txt") from exc
+        from .pgstore import PostgresStorage
+        return PostgresStorage(config.DATABASE_URL)
+    return Storage()
+
+
+storage = build_storage()
 
 
 # Module-level convenience wrappers (pipeline calls store.append(...)).
