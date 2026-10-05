@@ -6,6 +6,62 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v1.4.0] — 2026-10-06 — reliability, knowledge ops, honest metrics
+
+This release answers the questions an operator or buyer asks next:
+"which part is broken right now?", "who is allowed to do what?",
+"can we fix a stale policy without a redeploy?", and — the uncomfortable
+one — "is the AI actually faster, and is the risk gate actually right?"
+As always: everything ships off-by-default-safe, the demo still runs with
+zero configuration, and the metrics refuse to lie about sample size.
+
+### Added
+- **Component health report**: `GET /api/health` reports each moving part
+  with a machine-readable status — storage writability with per-collection
+  record counts, knowledge corpus chunks, approval-queue backlog (≥ 100
+  pending → degraded), outbox dead letters, outbound delivery config, LLM
+  gateway mode/tiers, and budget posture. Checks degrade loudly instead of
+  erroring; the dashboard renders the strip live.
+- **Knowledge management API**: list/read/create/delete policy documents
+  over `GET/POST /api/knowledge` and `GET/DELETE /api/knowledge/{doc_id}`.
+  Slugs are traversal-proof — path-like names are rejected outright, not
+  silently rewritten — replacing a document requires an explicit
+  `overwrite` flag (409 otherwise), and the retriever reloads before every
+  response, so the next ticket retrieves from the new corpus. Dashboard
+  knowledge manager included.
+- **Role-scoped API keys**: `AIOPS_APPROVER_KEY` (read + review decisions)
+  and `AIOPS_ADMIN_KEY` (prune) below the master key, with constant-time
+  role resolution and route-level scoping — `decide_review` requires the
+  approver role, `prune` requires admin. Auth disabled ⇒ everything open,
+  local dev unchanged.
+- **A/B cycle-time analytics**: tickets/runs accept `cycle_seconds`
+  (ai_assisted cohort); `POST /api/analytics/ab/records` stamps the manual
+  cohort into a new `cycle_times` collection. `GET /api/analytics/ab`
+  publishes median/p90/mean — and withholds any "% faster" figure below
+  five samples per cohort, saying so instead.
+- **Quality-gate metrics**: `GET /api/analytics/quality` turns the review
+  ledger into gate precision (rejected / decided escalations) and a recall
+  proxy from feedback (thumbs-down auto-resolutions / auto-resolutions).
+  Measured from outcomes only — no re-scoring, works offline.
+- **Desktop launcher + shortcut (Windows)**: `scripts/launch_aiops.cmd`
+  serves on :8200 with a single-instance guard, `/health` wait and
+  `data\launcher.log`; `scripts/create_desktop_shortcut.ps1` installs an
+  idempotent "AI Ops Platform" Desktop shortcut.
+- **Docs**: `docs/DATA_MODEL.md` (every collection's writer, shape and
+  retention cap), `docs/DECISIONS.md` (decision log), `docs/TESTING.md`
+  (testing guide).
+
+### Fixed
+- Dashboard: `designWorkflow` was missing its closing brace — shipped in
+  v1.3.0 as a script parse error that left **every** panel stuck on
+  "Loading…". All panels render again.
+
+### Changed
+- Test suite 116 → 149 (33 new across health, knowledge, roles, A/B and
+  gate-quality tests; `cycle_times` is the 11th store collection).
+- `.env.example` documents the role keys; OPERATIONS, ARCHITECTURE and
+  project-plan refreshed for v1.4.0.
+
 ## [v1.3.0] — 2026-10-01 — the learning loop
 
 The platform no longer just runs and reports — it can be *questioned*.
@@ -117,6 +173,7 @@ deployment would be asked for it before go-live.
   LangGraph graph, CRM/email/billing/Slack adapters, audit log.
 - Operator dashboard, end-to-end demo, Docker + n8n compose, CI.
 
+[v1.4.0]: https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/compare/v1.3.0...v1.4.0
 [v1.2.0]: https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/compare/v1.1.0...v1.2.0
 [v1.1.0]: https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/compare/v1.0.0...v1.1.0
 [v1.0.0]: https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/releases/tag/v1.0.0
