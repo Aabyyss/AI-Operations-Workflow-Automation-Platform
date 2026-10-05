@@ -9,7 +9,7 @@ An AI-powered platform that answers the questions businesses actually ask:
 Two sides in one system — **AI Product Management** (business case) and
 **AI Integration** (working pipeline + integrations).
 
-[![CI](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml) ![dispositions](https://img.shields.io/badge/tests-116%2F116-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue) ![eval](https://img.shields.io/badge/eval-8%2F8%20routing%20accuracy-brightgreen) ![security](https://img.shields.io/badge/security-auth%20·%20HMAC%20·%20rate%20limit%20%28opt%2Din%29-blue) ![observability](https://img.shields.io/badge/observability-prometheus%20·%20SSE%20·%20replay%20·%20drift-blue) ![version](https://img.shields.io/badge/version-1.3.0-blue)
+[![CI](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml) ![dispositions](https://img.shields.io/badge/tests-149%2F149-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue) ![eval](https://img.shields.io/badge/eval-8%2F8%20routing%20accuracy-brightgreen) ![security](https://img.shields.io/badge/security-auth%20·%20roles%20·%20HMAC%20·%20rate%20limit%20%28opt%2Din%29-blue) ![observability](https://img.shields.io/badge/observability-prometheus%20·%20SSE%20·%20health%20·%20replay%20·%20drift-blue) ![version](https://img.shields.io/badge/version-1.4.0-blue)
 
 ---
 
@@ -21,6 +21,7 @@ cp .env.example .env            # optional — defaults run offline in mock mode
 python -m scripts.demo          # end-to-end walkthrough, prints ROI + pipeline results
 python -m scripts.eval_quality  # governance eval: routing accuracy + escalation recall
 uvicorn backend.main:app --reload
+scripts\launch_aiops.cmd       # Windows: one-click start on :8200 + dashboard shortcut
 # open http://localhost:8000  -> operator dashboard
 ```
 
@@ -53,9 +54,10 @@ the model claims. Every decision, action, and token is audit-logged.
 ## Architecture
 
 ```text
-dashboard/index.html          operator UI (served by the API)
+dashboard/index.html          operator UI: health strip, quality + A/B panels, knowledge manager
 backend/
-  main.py                     FastAPI: analyze, tickets, reviews, analytics
+  main.py                     FastAPI: analyze, tickets, reviews, knowledge, analytics, health
+  security.py                 optional API-key gate + role scoping (operator/approver/admin)
   analyzer.py                 process analyzer (Phase 1+2)
   roi.py                      labor + token cost engine
   pipeline.py                 6-agent pipeline + risk gates (source of truth)
@@ -63,11 +65,15 @@ backend/
   rag.py                      markdown -> chunks -> TF-IDF/live embeddings
   llm.py                      mock / OpenAI-compatible gateway
   mock_ai.py                  deterministic heuristics for offline mode
-  store.py                    swappable JSON persistence
+  store.py                    swappable JSON persistence (11 collections)
+  health.py                   component health report (storage → budget)
+  knowledge.py                corpus CRUD: safe slugs, explicit overwrite, auto-reload
+  ab_testing.py               ai vs manual cycle-time cohorts (honest-sample gated)
+  quality_gate.py             gate precision + recall proxy from outcomes
   integrations/               CRM, email, billing, Slack + audit log
-knowledge_base/               company policies (RAG corpus)
+knowledge_base/               company policies (RAG corpus — editable over the API)
 n8n/workflows/                importable ticket-intake bridge workflow
-tests/                        25 tests: ROI math, RAG, governance, API
+tests/                        149 tests: governance, contracts, security, analytics
 ```
 
 ## API tour
@@ -113,6 +119,25 @@ The platform can be questioned, not just watched:
 - **Retention** — `POST /api/admin/prune` with per-collection caps,
   dry-run first.
 
+### The reliability layer (v1.4.0)
+
+The questions an operator asks at 2am, answered in code:
+
+- **Component health** — `GET /api/health`: storage, corpus, approval
+  backlog, dead letters, gateway mode, budget posture — each with a
+  machine-readable status, rendered live in the dashboard strip.
+- **Knowledge ops** — create/update/delete policy documents over the API
+  (traversal-proof slugs, explicit overwrite, auto-reload). No redeploy
+  to fix a stale policy.
+- **Role-scoped keys** — approver (decisions) and admin (prune) keys
+  below the master key; asymmetric on purpose.
+- **Honest A/B** — ai-assisted vs manual cycle-time distributions; any
+  "% faster" figure is withheld under 5 samples per cohort.
+- **Gate quality** — precision from review outcomes, recall proxy from
+  feedback thumbs; measured, not re-scored.
+- **Windows launcher** — `scripts\launch_aiops.cmd` + Desktop shortcut;
+  port 8200, single-instance, logs to `data\launcher.log`.
+
 ## Documentation
 
 | Doc | What's in it |
@@ -123,11 +148,15 @@ The platform can be questioned, not just watched:
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module walkthrough with request traces |
 | [docs/BI_INTEGRATION.md](docs/BI_INTEGRATION.md) | Power BI / analytics feed endpoints and schema |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Day-2: config, storage, troubleshooting, backup |
+| [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Every collection: writer, shape, retention cap |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Decision log: context → decision → consequence |
+| [docs/TESTING.md](docs/TESTING.md) | What the 149 tests pin, fixtures, CI gates |
 | [CHANGELOG.md](CHANGELOG.md) | Release history — what shipped when and why |
 
 ## Roadmap
 
+- [x] Quality-gate precision/recall from review outcomes (v1.4.0)
+- [x] Per-process A/B: AI-assisted vs manual cycle-time tracking (v1.4.0)
 - [ ] Postgres + pgvector behind the same `Storage` interface
 - [ ] n8n outbound poller executing the outbox against real vendor APIs
-- [ ] Quality-gate precision/recall dashboard from review outcomes
-- [ ] Per-process A/B: AI-assisted vs manual cycle-time tracking
+- [ ] Admin-gated knowledge mutations for shared deployments
