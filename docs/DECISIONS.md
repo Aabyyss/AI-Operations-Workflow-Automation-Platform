@@ -71,7 +71,7 @@ in [GOVERNANCE.md](GOVERNANCE.md); storage shapes in
 ## D11 · Role-scoped keys, deliberately asymmetric — v1.4
 
 - **Context:** one master key meant whoever could POST a ticket could also approve refunds and prune data.
-- **Decision:** the master key (`AIOPS_API_KEY`) is the **operator** role. `AIOPS_APPROVER_KEY` grants read + review decisions; `AIOPS_ADMIN_KEY` grants admin mutations (prune, reload) but **never** approval decisions. Scoping is constant-time and applied as route dependencies; with auth disabled everything stays open so local dev is unchanged.
+- **Decision:** the master key (`AIOPS_API_KEY`) is the **operator** role. `AIOPS_APPROVER_KEY` grants read + review decisions; `AIOPS_ADMIN_KEY` grants admin mutations (prune) but **never** approval decisions. Scoping is constant-time and applied as route dependencies; with auth disabled everything stays open so local dev is unchanged.
 - **Consequence:** an approver cannot mint approvals; an admin cannot approve refunds. Delegation no longer means full trust.
 
 ## D12 · Honest A/B: no percentages below five samples — v1.4

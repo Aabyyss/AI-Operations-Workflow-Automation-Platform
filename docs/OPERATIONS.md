@@ -21,6 +21,9 @@ to `.env`). Defaults are safe: **mock mode, offline, no keys**.
 | `AIOPS_MONETARY_APPROVAL_LIMIT_USD` | `500` | money actions above this always need approval |
 | `AIOPS_MIN_RETRIEVAL_SCORE` | `0.15` | below this, retrieval is "weak" → escalate |
 | `AIOPS_MIN_AUTO_CONFIDENCE` | `0.75` | blended confidence floor for auto-execution |
+| `AIOPS_API_KEY` | — | master key; enables auth, grants the **operator** role |
+| `AIOPS_APPROVER_KEY` | — | role-scoped key: read + review decisions |
+| `AIOPS_ADMIN_KEY` | — | role-scoped key: admin mutations (prune) — never approval decisions |
 
 Changing a governance threshold is a **governance decision** — see
 [GOVERNANCE.md](GOVERNANCE.md), not a tuning knob.
@@ -40,6 +43,7 @@ data/
   feedback.json      operator thumbs/corrections per run (v1.3.0)
   workflows.json     generated n8n workflow records
   analyses.json      stored process analyses
+  cycle_times.json   manual-cohort cycle-time records for A/B (v1.4.0)
   audit.jsonl        append-only audit log — one line per event
 ```
 
@@ -48,6 +52,7 @@ data/
 - Backup = copy the directory. Restore = put it back.
 - Swapping to Postgres means implementing the same `Storage` interface;
   nothing else in the codebase touches persistence directly.
+- Every collection's writer, shape and retention cap: [DATA_MODEL.md](DATA_MODEL.md).
 
 ## 3. Running the API
 
@@ -63,6 +68,21 @@ Demo fixture (no data setup needed):
 ```bash
 curl -X POST localhost:8000/api/tickets/demo
 ```
+
+### 3.1 One-click launch (Windows)
+
+`scripts\launch_aiops.cmd` starts the API on **:8200** and opens the
+dashboard in the default browser. It never starts a second instance — an
+existing listener on :8200 just reopens the dashboard — waits up to 20 s
+for `/health`, and logs to `data\launcher.log`. To install the Desktop
+shortcut ("AI Ops Platform", idempotent — rerunning it repairs the `.lnk`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\create_desktop_shortcut.ps1
+```
+
+The launcher deliberately uses :8200 so it can never collide with a
+developer's own `uvicorn` on :8000.
 
 ## 4. The n8n bridge
 
@@ -130,6 +150,23 @@ change fails CI instead of silently breaking a scheduled refresh.
 | `POST /api/admin/prune` | retention dry-run; `?confirm=true` executes (see §7) |
 | Model routing | `AIOPS_LIGHT_MODEL` (intake/quality) vs `AIOPS_HEAVY_MODEL` (drafts) — inert until set |
 
+### 5.2 v1.4.0 operational endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/health` | component report: storage record counts, corpus chunks, queue backlog (≥ 100 pending → degraded), outbox dead letters, delivery config, gateway mode/tiers, budget posture. Needs a key when auth is on — use `/health` or `/ready` for probes |
+| `GET /api/knowledge` | corpus inventory: id, title, chunk count, size, last modified |
+| `POST /api/knowledge` | create/update a policy document; replacing requires explicit `overwrite` (409 otherwise); index reloads before responding |
+| `GET /api/knowledge/{doc_id}` · `DELETE /api/knowledge/{doc_id}` | read / remove a document (index reloads immediately) |
+| `POST /api/analytics/ab/records` | stamp a manual-cohort cycle time (ticket, label, `cycle_seconds`) |
+| `GET /api/analytics/ab` | ai-assisted vs manual cycle-time distributions; `%` withheld under 5 samples per cohort |
+| `GET /api/analytics/quality` | gate precision (rejected / decided escalations) + recall proxy from thumbs-down auto-resolutions |
+
+**Role scoping.** Review decisions require the operator or approver key;
+`/api/admin/prune` requires the operator or admin key; every other route
+(including knowledge CRUD) accepts any configured role. With auth
+disabled everything stays open — local dev is unchanged.
+
 ## 6. Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -139,6 +176,9 @@ change fails CI instead of silently breaking a scheduled refresh.
 | Auto-resolve on tickets you expected to escalate | threshold env overrides from an old shell | dump effective config at boot |
 | Duplicate outbound emails after replay | outbox replayed without dry-run | use the executor's dry-run mode first |
 | Dashboard shows stale analytics | analytics computed on demand per run | re-POST a ticket or check `/api/runs` freshness |
+| Dashboard panels stuck on "Loading…" | dashboard script parse error (one shipped in v1.3.0) | fixed in v1.4.0 — hard-refresh the page (Ctrl+F5) |
+| `403 requires role: ...` | presented key lacks the route's role | use the master key or the matching scoped key |
+| Edited a `.md` by hand, drafts unchanged | retriever still holds the old index | `POST /api/knowledge/reload` (API-created docs reload automatically) |
 
 ## 7. Upgrading / migrating
 
