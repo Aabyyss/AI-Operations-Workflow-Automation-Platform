@@ -14,6 +14,9 @@ services:
       - AIOPS_RATE_LIMIT=${AIOPS_RATE_LIMIT:-0}
       # ---- observability ----
       - AIOPS_REQUEST_LOG_FILE=${AIOPS_REQUEST_LOG_FILE:-}
+      # ---- storage (json default; postgres via the profile below) ----
+      - AIOPS_STORAGE=${AIOPS_STORAGE:-json}
+      - AIOPS_DATABASE_URL=${AIOPS_DATABASE_URL:-postgresql://aiops:aiops@postgres:5432/aiops}
     volumes:
       - ./data:/app/data
       - ./knowledge_base:/app/knowledge_base
@@ -39,5 +42,29 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
 
+  # ------------------------------------------------------------------
+  # Optional Postgres storage backend — `docker compose --profile postgres up`
+  # Then: AIOPS_STORAGE=postgres, AIOPS_DATABASE_URL=postgresql://aiops:aiops@postgres:5432/aiops
+  # Migrate existing JSON data:  python -m scripts.migrate_to_postgres --dsn ... --replace --verify
+  # ------------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: aiops-postgres
+    profiles: ["postgres"]
+    environment:
+      - POSTGRES_USER=aiops
+      - POSTGRES_PASSWORD=aiops
+      - POSTGRES_DB=aiops
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiops -d aiops"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
 volumes:
   n8n_data:
+  pg_data:
