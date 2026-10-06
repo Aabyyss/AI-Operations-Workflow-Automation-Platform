@@ -264,6 +264,83 @@ class UsageRecord(BaseModel):
     mode: Literal["mock", "live"] = "mock"
 
 
+# ---------------------------------------------------------------------------
+# Cost comparison — a buyer's volume against market list prices
+# ---------------------------------------------------------------------------
+class CostComparisonRequest(BaseModel):
+    """Inputs for modelling what a support AI costs at the buyer's volume.
+
+    Everything here is the buyer's own number except the market presets,
+    which carry their source. Our side of the comparison is *measured* from
+    the run ledger, not estimated — that asymmetry is the whole point.
+    """
+    monthly_volume: int = Field(default=1500, gt=0, description="Conversations/tickets per month")
+    resolution_rate_pct: float = Field(
+        default=50.0, ge=0, le=100,
+        description="Share of volume per-outcome pricing actually bills for")
+    seats: int = Field(default=0, ge=0, description="Seats, for seat-based plans")
+    plan_slugs: list[str] | None = Field(
+        default=None, description="Market presets to model; omit for all of them")
+    # Overrides for a quoted vendor rate that isn't published.
+    per_outcome_usd: float | None = Field(default=None, ge=0)
+    seat_price_usd: float | None = Field(default=None, ge=0)
+    flat_monthly_usd: float | None = Field(default=None, ge=0)
+    # Our side: infra allowance plus optional human-review time.
+    platform_monthly_usd: float = Field(
+        default=50.0, ge=0, description="Hosting/infra allowance for the pipeline")
+    include_human_review_cost: bool = Field(
+        default=False,
+        description="Price the human minutes our escalations consume")
+    human_hourly_rate_usd: float = Field(default=25.0, ge=0)
+    human_minutes_per_escalation: float = Field(default=6.0, ge=0)
+
+
+class PlanCost(BaseModel):
+    """What one market plan would cost at the buyer's volume."""
+    slug: str
+    vendor: str
+    model: Literal["per_outcome", "seat_plus_outcome", "flat_platform", "quote_only"]
+    source: str = ""
+    note: str = ""
+    monthly_usd: float | None = None
+    annual_usd: float | None = None
+    cost_per_ticket_usd: float | None = None
+    components: dict[str, float] = Field(default_factory=dict)
+    # Resolution rate above which this plan costs more than running the
+    # pipeline. None when it cannot be computed (quote-only, or 0 outcomes
+    # billed) — the reason is in `breakeven_note`.
+    breakeven_resolution_rate_pct: float | None = None
+    breakeven_note: str = ""
+    monthly_delta_usd: float | None = Field(
+        default=None, description="plan − ours: positive means the plan costs more")
+    verdict: Literal["cheaper", "more_expensive", "quote_required", "not_comparable"] = "not_comparable"
+
+
+class CostComparison(BaseModel):
+    """Modelled market cost vs our measured cost at one volume."""
+    inputs: dict[str, Any]
+    measured_cost_per_decision_usd: float
+    measured_from_decisions: int
+    measurement_basis: Literal["measured", "indicative", "default"]
+    sample_sufficient: bool
+    min_sample_for_measured: int
+    mode: str = "mock"
+    escalations_per_month: float = 0.0
+    our_monthly_usd: float = 0.0
+    our_annual_usd: float = 0.0
+    our_cost_per_ticket_usd: float = 0.0
+    our_components: dict[str, float] = Field(default_factory=dict)
+    plans: list[PlanCost] = Field(default_factory=list)
+    cheapest_plan_slug: str | None = None
+    plans_beaten: int = Field(
+        default=0, description="Modelled plans this pipeline came out cheaper than")
+    plans_that_beat_us: list[str] = Field(
+        default_factory=list, description="Modelled plans that cost less than the pipeline")
+    assumptions: list[str] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
+    audit_event: str = "cost_comparison_modelled"
+
+
 def redact_emails(text: str) -> str:
     """Cheap PII scrub used by the quality gate."""
     return re.sub(r"[\w.+-]+@[\w-]+\.[\w.-]+", "[redacted-email]", text)

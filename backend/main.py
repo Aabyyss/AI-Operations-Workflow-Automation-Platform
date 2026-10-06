@@ -22,8 +22,9 @@ from .analyzer import analyze_process
 from .run_metrics import feedback_metrics, run_performance_metrics
 from .integrations import actions as integ
 from .integrations.audit import audit_log
-from .models import (Feedback, PipelineResult, ProcessInput, ReviewDecision,
-                     Ticket, WorkflowDesignRequest, iso_now)
+from .models import (CostComparisonRequest, Feedback, PipelineResult,
+                     ProcessInput, ReviewDecision, Ticket,
+                     WorkflowDesignRequest, iso_now)
 from .rag import retriever
 from .retention import COLLECTION_LIMITS, select_for_prune
 from .store import storage
@@ -645,6 +646,46 @@ def ab_cycle_time() -> dict:
     from .ab_testing import ab_report
 
     return ab_report(storage.all("runs"), storage.all("cycle_times"))
+
+
+# ------------------------------------------------- market cost comparison
+@app.get("/api/analytics/market-plans")
+def market_plans() -> dict:
+    """Published list prices for the AI-support plans we compare against.
+
+    A dated snapshot with a source per entry (see
+    docs/COMPETITIVE_ANALYSIS.md §3) — a business case that cites nothing
+    is a brochure. Callers may override any rate on the request instead of
+    editing the catalog.
+    """
+    from .cost_compare import PRICE_SNAPSHOT, list_market_plans
+
+    return {"price_snapshot": PRICE_SNAPSHOT, "plans": list_market_plans()}
+
+
+@app.post("/api/analytics/cost-comparison")
+def cost_comparison(req: CostComparisonRequest) -> dict:
+    """Model what market AI-support pricing costs at *your* volume against
+    what this pipeline actually costs per decision.
+
+    Answers the question per-outcome pricing makes hard: at what resolution
+    rate does paying per resolution overtake paying per decision? Our side
+    is read from the run ledger, never estimated, and the report names the
+    plans that come out cheaper than us.
+    """
+    from .cost_compare import compare_costs
+
+    result = compare_costs(storage.all("runs"), req)
+    audit_log("cost_comparison_modelled", {
+        "monthly_volume": req.monthly_volume,
+        "resolution_rate_pct": req.resolution_rate_pct,
+        "seats": req.seats,
+        "our_monthly_usd": result.our_monthly_usd,
+        "measurement_basis": result.measurement_basis,
+        "plans_modelled": [p.slug for p in result.plans],
+        "plans_that_beat_us": result.plans_that_beat_us,
+    })
+    return result.model_dump()
 
 
 # --------------------------------------------------------------- feedback
