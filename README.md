@@ -9,7 +9,7 @@ An AI-powered platform that answers the questions businesses actually ask:
 Two sides in one system — **AI Product Management** (business case) and
 **AI Integration** (working pipeline + integrations).
 
-[![CI](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml) ![dispositions](https://img.shields.io/badge/tests-149%2F149-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue) ![eval](https://img.shields.io/badge/eval-8%2F8%20routing%20accuracy-brightgreen) ![security](https://img.shields.io/badge/security-auth%20·%20roles%20·%20HMAC%20·%20rate%20limit%20%28opt%2Din%29-blue) ![observability](https://img.shields.io/badge/observability-prometheus%20·%20SSE%20·%20health%20·%20replay%20·%20drift-blue) ![version](https://img.shields.io/badge/version-1.4.0-blue)
+[![CI](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml) ![dispositions](https://img.shields.io/badge/tests-165%2F165-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue) ![eval](https://img.shields.io/badge/eval-8%2F8%20routing%20accuracy-brightgreen) ![security](https://img.shields.io/badge/security-auth%20·%20roles%20·%20HMAC%20·%20rate%20limit%20%28opt%2Din%29-blue) ![observability](https://img.shields.io/badge/observability-prometheus%20·%20SSE%20·%20health%20·%20replay%20·%20drift-blue) ![version](https://img.shields.io/badge/version-1.5.0-blue)
 
 ---
 
@@ -65,7 +65,8 @@ backend/
   rag.py                      markdown -> chunks -> TF-IDF/live embeddings
   llm.py                      mock / OpenAI-compatible gateway
   mock_ai.py                  deterministic heuristics for offline mode
-  store.py                    swappable JSON persistence (11 collections)
+  store.py                    swappable persistence (11 collections) + `build_storage()`
+  pgstore.py                  the same interface on one JSONB table (Postgres, opt-in)
   health.py                   component health report (storage → budget)
   knowledge.py                corpus CRUD: safe slugs, explicit overwrite, auto-reload
   ab_testing.py               ai vs manual cycle-time cohorts (honest-sample gated)
@@ -73,7 +74,7 @@ backend/
   integrations/               CRM, email, billing, Slack + audit log
 knowledge_base/               company policies (RAG corpus — editable over the API)
 n8n/workflows/                importable ticket-intake bridge workflow
-tests/                        149 tests: governance, contracts, security, analytics
+tests/                        165 tests: governance, contracts, security, storage, analytics
 ```
 
 ## API tour
@@ -143,6 +144,22 @@ The questions an operator asks at 2am, answered in code:
 - **Windows launcher** — `scripts\launch_aiops.cmd` + Desktop shortcut;
   port 8200, single-instance, logs to `data\launcher.log`.
 
+### Storage choice & tighter scope (v1.5.0)
+
+- **Postgres backend, same interface** — `AIOPS_STORAGE=postgres` puts every
+  collection on one JSONB `documents` table behind the identical seven
+  methods; insertion order, id lookup and shallow-merge updates behave the
+  same. pgvector-ready schema, and an unavailable pgvector extension degrades
+  instead of failing. JSON stays the default: the demo, tests and CI never
+  need a database.
+- **Migration path** — `python -m scripts.migrate_to_postgres --replace
+  --verify` copies and then count-checks every collection.
+- **Corpus writes need the admin key** — an approver can decide a refund but
+  can no longer rewrite the policy the refund is approved against.
+- **Dashboard tells the truth about small numbers** — sub-cent token costs no
+  longer render as `$0`, and long audit payloads wrap instead of running off
+  the card.
+
 ## Documentation
 
 | Doc | What's in it |
@@ -155,7 +172,10 @@ The questions an operator asks at 2am, answered in code:
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Day-2: config, storage, troubleshooting, backup |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Every collection: writer, shape, retention cap |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Decision log: context → decision → consequence |
-| [docs/TESTING.md](docs/TESTING.md) | What the 149 tests pin, fixtures, CI gates |
+| [docs/TESTING.md](docs/TESTING.md) | What the 165 tests pin, fixtures, CI gates |
+| [docs/COMPETITIVE_ANALYSIS.md](docs/COMPETITIVE_ANALYSIS.md) | Market positioning vs Intercom Fin, Zendesk AI, Sierra, Langfuse, n8n — and where we lose |
+| [marketing/linkedin-post.md](marketing/linkedin-post.md) | Launch copy, hooks, posting checklist |
+| [marketing/demo-dashboard-walkthrough.webm](marketing/demo-dashboard-walkthrough.webm) | Recorded dashboard walkthrough (~55s) + [shot list & narration](marketing/demo-video-shotlist.md) |
 | [CHANGELOG.md](CHANGELOG.md) | Release history — what shipped when and why |
 
 ## Roadmap
@@ -165,3 +185,5 @@ The questions an operator asks at 2am, answered in code:
 - [x] Postgres + pgvector behind the same `Storage` interface (opt-in)
 - [x] Admin-gated knowledge mutations for shared deployments
 - [ ] n8n outbound poller executing the outbox against real vendor APIs
+- [ ] pgvector retrieval cutover behind `AIOPS_RETRIEVAL` (one-file extension point)
+- [ ] Signed decision receipts — one verifiable artifact per decision for auditors

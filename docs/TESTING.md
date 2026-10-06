@@ -1,7 +1,7 @@
 # Testing Guide
 
 What the suite pins, how to run it, and how to extend it without
-weakening it. Current state: **149 tests across 31 files**, green in CI on
+weakening it. Current state: **165 tests across 32 files**, green in CI on
 Python 3.11 / 3.12 / 3.13, plus an eval-quality gate. Everything runs
 offline — no test touches the network.
 
@@ -32,6 +32,7 @@ ship.
 | Analytics math | `test_run_metrics.py`, `test_approval_sla.py`, `test_budget.py`, `test_drift.py`, `test_ab.py`, `test_quality_gate.py` | percentile / projection / swing regressions |
 | Security | `test_security.py`, `test_roles.py`, `test_webhook.py`, `test_ratelimit.py` | auth bypass, signature or replay-window regressions, role scoping errors |
 | Storage & ops | `test_backup.py`, `test_retention.py`, `test_ready.py`, `test_health.py` | prune destroying unparseable records, backup/restore breakage, component-report drift |
+| Storage backends | `test_pgstore.py` | SQL shape, insertion order, id-keying, transactional `replace_all`, and pgvector-unavailable degradation — all pinned with offline cursor/connection stubs, so the Postgres path is tested without a database. Also pins that `AIOPS_STORAGE=json` still builds the JSON store, and that a misconfigured Postgres setup fails with an actionable message instead of a stack trace |
 | Delivery & loop | `test_outbound.py`, `test_feedback.py`, `test_replay.py`, `test_stream.py`, `test_metrics_endpoint.py`, `test_reqlog.py`, `test_model_routing.py` | double-send, dead-letter mishandling, replay disposition diffs missing |
 
 ## 3. Fixtures (`tests/conftest.py`)

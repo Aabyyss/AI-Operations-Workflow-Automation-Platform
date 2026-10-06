@@ -6,6 +6,69 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v1.5.0] — 2026-10-07 — storage choice, tighter scope, honest dashboard
+
+Three themes: the storage layer stops being a constraint, the knowledge
+corpus gets the same role discipline as the approval queue, and the
+operator dashboard stops overstating (and understating) what it knows.
+JSON remains the default — every change here is opt-in, and the full suite
+still runs offline with zero API keys.
+
+### Added
+- **Postgres storage backend (opt-in)** — `AIOPS_STORAGE=postgres` swaps
+  every collection onto one JSONB `documents` table (`seq`, `collection`,
+  `payload`, `created_at`) behind the *identical* seven-method `Storage`
+  interface, so ids, shapes and retention behavior are unchanged. Insertion
+  order is preserved via a monotonic `seq`; `update` is a shallow JSONB merge
+  (`payload || %s::jsonb`) matching `dict.update`; `replace_all` is
+  DELETE + INSERT in one transaction. `ensure_schema(with_pgvector=True)`
+  creates the `vector` extension and a 1536-dim `embeddings` table — and
+  **degrades instead of failing** when pgvector is unavailable (rollback,
+  schema still created). DSN and `psycopg` are read lazily, so an unconfigured
+  install never imports the driver. 14 contract tests pin the SQL shape,
+  ordering, id-keying, transactional replace and all `build_storage()`
+  branches using offline cursor/connection stubs.
+- **`scripts/migrate_to_postgres.py`** — copies every collection from the JSON
+  store through the same interface; `--dsn`, `--replace`, `--pgvector`, and
+  `--verify` (compares per-collection counts and exits 1 on mismatch, 2 when
+  no DSN is supplied).
+- **pgvector Compose profile** — `docker compose --profile postgres up` starts
+  a `pgvector/pgvector:pg16` service with a healthcheck and wires
+  `AIOPS_STORAGE`/`AIOPS_DATABASE_URL` into the API container.
+- **Competitor analysis and launch collateral** — `docs/COMPETITIVE_ANALYSIS.md`
+  compares this platform against the resolution agents (Intercom Fin, Zendesk
+  AI, Ada, Forethought, Decagon, Sierra, Zowie, Lorikeet), the workflow
+  automation set (n8n, Zapier, Make, UiPath, Workato) and the agent
+  observability tools (LangSmith, Langfuse, Arize) — sourced pricing, an
+  explicit "where we lose" table, and a prioritized improvement roadmap.
+  `marketing/linkedin-post.md` and a recorded
+  `marketing/demo-dashboard-walkthrough.webm` (with shot list and narration
+  script) ship alongside it.
+
+### Changed
+- **Knowledge corpus mutations are admin-scoped** — `POST /api/knowledge` and
+  `DELETE /api/knowledge/{doc_id}` now require the admin role (or the master
+  key). Reads and `/api/knowledge/reload` stay open to any valid key. An
+  approver can still decide a refund but can no longer rewrite the policy the
+  refund is approved against.
+- **Dashboard audit feed rebuilt** — long payloads no longer run off the card
+  edge. Event lines wrap (`overflow-wrap:anywhere`), truncation appends a real
+  ellipsis instead of slicing mid-character, and payloads render as
+  key/value pairs (`ticket_id tkt_… · actions [...]`) with the full JSON in a
+  tooltip. Events are tone-coded; the card measures clean at
+  `scrollWidth == clientWidth`.
+
+### Fixed
+- **Cost-by-agent showed `$0` for every agent** — `money()` caps at two
+  decimals, so sub-cent token costs collapsed to zero and read as "free".
+  A precision-aware formatter now keeps cents for dollars and goes to five
+  decimals below a cent (`$0.00078`), with the exact figure in a tooltip.
+- **Cost table was structurally invalid** — it emitted a row with 2 cells under
+  4 headers plus an empty `colspan=2` row; now aggregates calls/tokens/cost per
+  agent over a correct `colspan=4`.
+- `docs/project-plan.md` milestone 11 ("Postgres + pgvector") still read
+  `⬜ next` after the work shipped; now points at milestone 31.
+
 ## [v1.4.0] — 2026-10-06 — reliability, knowledge ops, honest metrics
 
 This release answers the questions an operator or buyer asks next:
