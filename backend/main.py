@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                Response, StreamingResponse)
 from pydantic import BaseModel
@@ -686,6 +686,37 @@ def cost_comparison(req: CostComparisonRequest) -> dict:
         "plans_that_beat_us": result.plans_that_beat_us,
     })
     return result.model_dump()
+
+
+@app.get("/api/analytics/cost-comparison/one-pager.html",
+         response_class=HTMLResponse)
+def cost_one_pager(monthly_volume: int = Query(1500, gt=0),
+                   resolution_rate_pct: float = Query(50.0, ge=0, le=100),
+                   seats: int = Query(0, ge=0),
+                   platform_monthly_usd: float = Query(50.0, ge=0),
+                   include_human_review_cost: bool = False,
+                   human_hourly_rate_usd: float = Query(25.0, ge=0),
+                   human_minutes_per_escalation: float = Query(6.0, ge=0)) -> HTMLResponse:
+    """A shareable, print-ready one-pager for these inputs.
+
+    Rendered from the same comparison the JSON endpoint returns — the page
+    is generated, never hand-written, so a prospect can re-derive every line
+    and the document cannot drift from the API. Self-contained HTML: no
+    external CSS, JS or images, safe to email as an attachment.
+    """
+    from .cost_compare import compare_costs
+    from .one_pager import render_one_pager
+
+    result = compare_costs(storage.all("runs"), CostComparisonRequest(
+        monthly_volume=monthly_volume,
+        resolution_rate_pct=resolution_rate_pct,
+        seats=seats,
+        platform_monthly_usd=platform_monthly_usd,
+        include_human_review_cost=include_human_review_cost,
+        human_hourly_rate_usd=human_hourly_rate_usd,
+        human_minutes_per_escalation=human_minutes_per_escalation,
+    ))
+    return HTMLResponse(render_one_pager(result))
 
 
 # --------------------------------------------------------------- feedback
