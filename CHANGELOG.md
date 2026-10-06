@@ -25,6 +25,15 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   and renders as a dashboard panel.
 - **`GET /api/analytics/market-plans`** — the dated list-price snapshot
   (sources included) so a UI or a buyer can inspect and override it.
+- **Buyer-facing one-pager** — `GET /api/analytics/cost-comparison/one-pager.html`
+  and `python -m scripts.cost_onepager` render the same comparison as a
+  self-contained, print-ready page (no CDN, no JS, no images — safe to email
+  or Ctrl+P). It is *generated*, never written by hand, so the document cannot
+  disagree with the API a prospect might call themselves; both paths go
+  through one renderer. The page leads with the crossover rate, then publishes
+  a **"where this comparison says we lose"** section, the measurement basis and
+  sample floor, and the caveats that would otherwise flatter us. A dashboard
+  link regenerates it from whatever inputs are on screen.
 
 ## [v1.5.0] — 2026-10-07 — storage choice, tighter scope, honest dashboard
 

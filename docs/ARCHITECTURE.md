@@ -100,6 +100,9 @@ Measurement surfaces that watch the same data (no second pipeline):
   GET /api/analytics/ab        cycle-time: ai_assisted runs vs manual records
   GET /api/analytics/quality   gate precision from reviews, recall proxy from feedback
   POST /api/analytics/cost-comparison  published market prices vs our measured cost/decision
+  GET  /api/analytics/cost-comparison/one-pager.html
+                               the same comparison rendered to share; backend/one_pager.py
+                               (also used by python -m scripts.cost_onepager)
 ```
 
 ## Extension points

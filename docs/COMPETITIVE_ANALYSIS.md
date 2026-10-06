@@ -189,8 +189,13 @@ this".
    the pipeline (`breakeven_resolution_rate_pct`) — 3.4% for Fin, 1.7% for
    Agentforce at 1,500 tickets — which is the number a buyer should argue
    about, and it names the plans that come out cheaper than us. Rendered as a
-   dashboard panel with its assumptions and caveats inline. This is the single
-   highest-leverage piece of collateral against the per-outcome pricing model.
+   dashboard panel with its assumptions and caveats inline, **and as a generated
+   print-ready one-pager** (`scripts/cost_onepager` / `GET …/one-pager.html`) —
+   the collateral and the product share one renderer, so the document a prospect
+   forwards cannot disagree with the API they can call. It leads with the
+   crossover rate and contains a "where this comparison says we lose" section.
+   This is the single highest-leverage piece of collateral against the
+   per-outcome pricing model.
 
 ### P3 — Polish that the screenshot showed missing
 10. **A UI pass, not a UI fix.** The audit overflow was a symptom of rendering

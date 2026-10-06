@@ -1,7 +1,7 @@
 # Testing Guide
 
 What the suite pins, how to run it, and how to extend it without
-weakening it. Current state: **191 tests across 33 files**, green in CI on
+weakening it. Current state: **207 tests across 34 files**, green in CI on
 Python 3.11 / 3.12 / 3.13, plus an eval-quality gate. Everything runs
 offline — no test touches the network.
 
@@ -32,6 +32,7 @@ ship.
 | Analytics math | `test_run_metrics.py`, `test_approval_sla.py`, `test_budget.py`, `test_drift.py`, `test_ab.py`, `test_quality_gate.py` | percentile / projection / swing regressions |
 | Security | `test_security.py`, `test_roles.py`, `test_webhook.py`, `test_ratelimit.py` | auth bypass, signature or replay-window regressions, role scoping errors |
 | Storage & ops | `test_backup.py`, `test_retention.py`, `test_ready.py`, `test_health.py` | prune destroying unparseable records, backup/restore breakage, component-report drift |
+| Shareable artifact safety | `test_one_pager.py` | a document that leaves the building and is never re-derived: the CLI and the endpoint must produce byte-identical HTML (one renderer, no drift), a hostile vendor string must be escaped rather than becoming markup, and the honesty sections — sample floor, "where we lose", quote-required plans never rendering as `$0.00` — must be present |
 | Cost model honesty | `test_cost_compare.py` | a comparison that silently wins: per-outcome/seat/flat arithmetic, the crossover rate, a quote-only plan priced at zero, and the honesty rules (sample floor, mock-mode caveat, every preset cited, losing plans named). `plans_beaten` and `plans_that_beat_us` are asserted as inverses so neither can quietly count the same outcome |
 | Storage backends | `test_pgstore.py` | SQL shape, insertion order, id-keying, transactional `replace_all`, and pgvector-unavailable degradation — all pinned with offline cursor/connection stubs, so the Postgres path is tested without a database. Also pins that `AIOPS_STORAGE=json` still builds the JSON store, and that a misconfigured Postgres setup fails with an actionable message instead of a stack trace |
 | Delivery & loop | `test_outbound.py`, `test_feedback.py`, `test_replay.py`, `test_stream.py`, `test_metrics_endpoint.py`, `test_reqlog.py`, `test_model_routing.py` | double-send, dead-letter mishandling, replay disposition diffs missing |
