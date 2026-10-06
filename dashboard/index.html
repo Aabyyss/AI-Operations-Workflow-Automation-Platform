@@ -90,6 +90,13 @@
   .ev .ev-payload b{color:var(--text); font-weight:600}
   .ev-good{color:var(--good)} .ev-warn{color:var(--warn)}
   .ev-bad{color:var(--bad)} .ev-info{color:var(--accent)}
+  /* Cost comparison: our own row is visually distinct from the market rows,
+     so a reader can never mistake which line is the pipeline's. */
+  .cc-ours td{background:var(--panel2); font-weight:600}
+  .cc-inline{display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-top:10px}
+  .cc-inline label{margin:0; display:flex; gap:6px; align-items:center}
+  .cc-inline input[type=number]{width:88px}
+  .cc-inline input[type=checkbox]{width:auto}
 </style>
 </head>
 <body>
@@ -199,6 +206,41 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
   </div>
 
   <div class="card" style="margin-top:14px">
+    <h2>Market Cost Comparison · your volume vs published list prices</h2>
+    <div class="muted" style="margin-bottom:4px">
+      What per-outcome and per-seat pricing costs at your volume, against what this pipeline
+      actually costs per decision — measured from the run ledger, never estimated. The report
+      names the plans that come out cheaper than us.
+    </div>
+    <div class="row" style="gap:10px; margin-top:10px">
+      <div>
+        <label>Monthly conversations / tickets</label>
+        <input id="cc_volume" type="number" min="1" value="1500">
+      </div>
+      <div>
+        <label>Share the vendor's meter bills for (%)</label>
+        <input id="cc_rate" type="number" min="0" max="100" value="50">
+      </div>
+      <div>
+        <label>Seats (for seat-based plans)</label>
+        <input id="cc_seats" type="number" min="0" value="0">
+      </div>
+      <div>
+        <label>Our infra allowance ($/month)</label>
+        <input id="cc_platform" type="number" min="0" value="50">
+      </div>
+    </div>
+    <div class="cc-inline">
+      <label><input id="cc_human" type="checkbox"> price the human minutes our escalations use</label>
+      <label>$/h <input id="cc_human_rate" type="number" min="0" value="25"></label>
+      <label>min / escalation <input id="cc_human_mins" type="number" min="0" value="6"></label>
+      <button onclick="runCostCompare()">Compare</button>
+      <span id="cc_msg" class="muted"></span>
+    </div>
+    <div id="cc_out" class="muted" style="margin-top:12px">Loading…</div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
     <h2>Knowledge Base · RAG corpus</h2>
     <div id="kb_list" class="muted">Loading…</div>
     <details style="margin-top:10px">
@@ -277,7 +319,7 @@ function setTheme(mode) {
 
 async function loadAll() {
   try {
-    const [summary, reviews, usage, audit, runs, sla, perf, budget, drift, health, quality, ab, knowledge] = await Promise.all([
+    const [summary, reviews, usage, audit, runs, sla, perf, budget, drift, health, quality, ab, knowledge, plans] = await Promise.all([
       api("/api/analytics/summary"),
       api("/api/reviews"),
       api("/api/usage"),
@@ -291,6 +333,7 @@ async function loadAll() {
       api("/api/analytics/quality").catch(() => null),
       api("/api/analytics/ab").catch(() => null),
       api("/api/knowledge").catch(() => null),
+      api("/api/analytics/market-plans").catch(() => null),
     ]);
     renderKpis(summary, sla, perf);
     renderCosts(usage);
@@ -304,6 +347,8 @@ async function loadAll() {
     renderQuality(quality);
     renderAB(ab);
     renderKnowledge(knowledge);
+    if (plans) $("cc_msg").textContent = `list prices as of ${plans.price_snapshot}`;
+    runCostCompare();
   } catch (e) { console.error(e); }
 }
 
@@ -394,6 +439,92 @@ function renderCosts(usage) {
   $("cost_tbl").querySelector("tbody").innerHTML = rows.length ? rows.map(([a,c]) =>
     `<tr><td>${esc(a)}</td><td>${c.calls}</td><td>${c.tin.toLocaleString()} / ${c.tout.toLocaleString()}</td><td title="$${c.cost.toFixed(8)}">${usd(c.cost)}</td></tr>`).join("")
     : `<tr><td colspan="4" class="muted">No usage recorded yet</td></tr>`;
+}
+
+// ---- Market cost comparison: model published list prices at your volume
+// against our measured cost per decision. Every preset carries its source,
+// and the report names the plans that beat us.
+async function runCostCompare() {
+  const out = $("cc_out");
+  if (!out) return;
+  const body = {
+    monthly_volume: Math.max(1, Math.round(Number($("cc_volume").value) || 1)),
+    resolution_rate_pct: Math.min(100, Math.max(0, Number($("cc_rate").value) || 0)),
+    seats: Math.max(0, Math.round(Number($("cc_seats").value) || 0)),
+    platform_monthly_usd: Math.max(0, Number($("cc_platform").value) || 0),
+    include_human_review_cost: $("cc_human").checked,
+    human_hourly_rate_usd: Math.max(0, Number($("cc_human_rate").value) || 0),
+    human_minutes_per_escalation: Math.max(0, Number($("cc_human_mins").value) || 0),
+  };
+  out.innerHTML = '<span class="muted">Modelling…</span>';
+  try {
+    renderCostCompare(await api("/api/analytics/cost-comparison",
+                               {method: "POST", body: JSON.stringify(body)}));
+  } catch (e) {
+    out.innerHTML = `<span class="bad">${esc(e.message)}</span>`;
+  }
+}
+
+function renderCostCompare(r) {
+  const basis = {
+    measured: ["measured on this deployment's runs", "good"],
+    indicative: ["indicative — below the sample floor", "warn"],
+    default: ["assumed default, no runs recorded yet", "warn"],
+  }[r.measurement_basis] || ["unknown", "muted"];
+  const priced = r.plans.filter(p => p.monthly_usd !== null);
+
+  const rows = r.plans.map(p => {
+    const quoted = p.monthly_usd === null;
+    const verdict = quoted
+      ? '<span class="pill pending">quote required</span>'
+      : (p.verdict === "more_expensive"
+          ? '<span class="pill auto">pipeline is cheaper</span>'
+          : '<span class="pill rejected">plan is cheaper</span>');
+    const breakeven = p.breakeven_resolution_rate_pct === null
+      ? `<span class="muted" title="${esc(p.breakeven_note)}">n/a</span>`
+      : `<b title="${esc(p.breakeven_note)}">${p.breakeven_resolution_rate_pct}%</b>`;
+    return `<tr>
+      <td><a href="${esc(p.source)}" target="_blank" rel="noopener"
+             style="color:inherit" title="${esc(p.note)}">${esc(p.vendor)}</a></td>
+      <td>${quoted ? "—" : money(p.monthly_usd)}</td>
+      <td>${quoted ? "—" : money(p.annual_usd)}</td>
+      <td>${quoted ? "—" : usd(p.cost_per_ticket_usd)}</td>
+      <td>${breakeven}</td>
+      <td>${verdict}</td>
+    </tr>`;
+  }).join("");
+
+  const lost = r.plans_that_beat_us.length
+    ? ` · <span class="warn">beaten by ${r.plans_that_beat_us.map(esc).join(", ")}</span>` : "";
+
+  $("cc_out").innerHTML = `
+    <div class="kpi">${money(r.our_monthly_usd)}<small> / month · ${usd(r.our_cost_per_ticket_usd)} per
+      ticket · cheaper than ${r.plans_beaten} of ${priced.length} modelled plans${lost}</small></div>
+    <div class="muted" style="margin-top:4px">
+      From <b>${r.measured_from_decisions}</b> recorded decision(s) ·
+      <span class="${basis[1]}">${basis[0]}</span> ·
+      <span class="${r.mode === "live" ? "good" : "warn"}">${esc(r.mode)} mode</span>${
+      r.escalations_per_month ? ` · ${r.escalations_per_month}/month touch a human` : ""}
+    </div>
+    <table style="margin-top:12px">
+      <thead><tr><th>Plan (source)</th><th>$ / month</th><th>$ / year</th><th>$ / ticket</th>
+        <th>Costs more above</th><th>Verdict</th></tr></thead>
+      <tbody>${rows}
+        <tr class="cc-ours">
+          <td>This pipeline</td><td>${money(r.our_monthly_usd)}</td>
+          <td>${money(r.our_annual_usd)}</td><td>${usd(r.our_cost_per_ticket_usd)}</td>
+          <td><span class="muted">flat — pays per decision, not per resolution</span></td>
+          <td><span class="pill auto">every ticket, resolved or not</span></td>
+        </tr></tbody>
+    </table>
+    <details style="margin-top:10px">
+      <summary class="muted" style="cursor:pointer">Assumptions &amp;
+        caveats (${r.assumptions.length + r.caveats.length})</summary>
+      <div class="muted" style="margin-top:8px"><b>Assumptions</b>
+        <ul style="margin:6px 0 0 18px">${r.assumptions.map(a => `<li>${esc(a)}</li>`).join("")}</ul></div>
+      <div class="muted" style="margin-top:8px"><b>Caveats</b>
+        <ul style="margin:6px 0 0 18px">${r.caveats.map(c => `<li>${esc(c)}</li>`).join("")}</ul></div>
+    </details>`;
 }
 
 function renderDispositions(s) {
