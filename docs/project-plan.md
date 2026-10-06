@@ -35,7 +35,7 @@ in one working system.
 | 8 | FastAPI + operator dashboard | ✅ | dashboard serves, analytics populate |
 | 9 | n8n bridge + Docker Compose | ✅ | importable workflow JSON, `compose up` |
 | 10 | Tests + CI (3.11–3.13) | ✅ | 46/46 green in GitHub Actions |
-| 11 | Postgres + pgvector behind `Storage` | ⬜ next | same interface, migration script |
+| 11 | Postgres + pgvector behind `Storage` | ✅ | shipped as milestone 31 — same interface, migration script, opt-in |
 | 12 | Outbound n8n executor (outbox → real vendors) | ⬜ | dry-run replay mode |
 | 13 | Quality eval harness (labeled ticket set) | ✅ | `python -m scripts.eval_quality`: 8/8 routing accuracy, 100% escalation recall, CI `eval-quality` job |
 | 14 | Workflow designer (Analysis → importable n8n graph) | ✅ | `POST /api/workflows/design`, deterministic JSON, download endpoint |
