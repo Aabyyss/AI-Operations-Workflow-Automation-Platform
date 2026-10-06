@@ -235,6 +235,9 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
       <label>$/h <input id="cc_human_rate" type="number" min="0" value="25"></label>
       <label>min / escalation <input id="cc_human_mins" type="number" min="0" value="6"></label>
       <button onclick="runCostCompare()">Compare</button>
+      <a id="cc_link" class="muted" style="text-decoration:underline" target="_blank"
+         rel="noopener" href="/api/analytics/cost-comparison/one-pager.html"
+         title="Generates a printable one-pager from these exact inputs — the page is rendered by the same engine as the table above">shareable one-pager ↗</a>
       <span id="cc_msg" class="muted"></span>
     </div>
     <div id="cc_out" class="muted" style="margin-top:12px">Loading…</div>
@@ -456,6 +459,11 @@ async function runCostCompare() {
     human_hourly_rate_usd: Math.max(0, Number($("cc_human_rate").value) || 0),
     human_minutes_per_escalation: Math.max(0, Number($("cc_human_mins").value) || 0),
   };
+  // Keep the one-pager link pointed at whatever is on screen, so the shared
+  // document matches the table the reader just looked at.
+  const link = $("cc_link");
+  if (link) link.href = "/api/analytics/cost-comparison/one-pager.html?" +
+    new URLSearchParams(body).toString();
   out.innerHTML = '<span class="muted">Modelling…</span>';
   try {
     renderCostCompare(await api("/api/analytics/cost-comparison",
