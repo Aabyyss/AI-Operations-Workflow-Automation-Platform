@@ -56,6 +56,7 @@ in one working system.
 | 29 | Quality-gate metrics | ✅ | `GET /api/analytics/quality` — precision from review outcomes, recall proxy from feedback |
 | 30 | Desktop launcher + shortcut (Windows) | ✅ | `scripts/launch_aiops.cmd` on :8200, single-instance guard, Desktop `.lnk` installer |
 | 31 | Postgres storage backend (opt-in) | ✅ | same `Storage` interface on one JSONB `documents` table; `AIOPS_STORAGE=postgres`, pgvector compose profile, verified migration script, 14 offline contract tests |
+| 32 | Market cost comparison at the buyer's volume | ✅ | `POST /api/analytics/cost-comparison` models cited list prices against measured cost/decision, publishes each plan's crossover rate and the plans that beat us; 26 offline tests pin the honesty rules |
 
 ## 3. Development roadmap (phases)
 

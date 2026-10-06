@@ -123,7 +123,9 @@ governance evidence, and the offline reproducibility in one artifact.
    let a skeptical engineer grade them in five minutes.
 5. **No meter.** Cost is measured per decision, not billed per resolution —
    direct answer to the "unpredictable AI spend" complaint the market keeps
-   voicing.
+   voicing. And the claim is checkable: `POST /api/analytics/cost-comparison`
+   prices the published market plans at any volume against our measured cost,
+   publishes the crossover rate for each, and lists the plans that beat us.
 6. **Portability of the audit.** Evidence lives in your Postgres/JSON, not a
    vendor dashboard. Lorikeet is explicitly targeting "audit-trail depth for
    regulated businesses"; on the support side that is the closest
@@ -179,11 +181,16 @@ this".
    delivery story.
 8. **SSO + per-key audit** (`who changed the corpus, when`) — the thinnest
    credible enterprise-identity story before anyone asks for SOC 2.
-9. **Cost-per-resolution comparison calculator** on the ROI side: paste your
-   volume and current vendor rate ($0.99/outcome, $2.00/conversation, seat
-   pricing) and see the modelled delta against measured cost/decision. This
-   is the single highest-leverage piece of collateral against the per-outcome
-   pricing model — and it reuses the analytics we already have.
+9. **Cost-per-resolution comparison calculator** — ✅ **shipped**:
+   `POST /api/analytics/cost-comparison` models every published list price
+   ($0.99/outcome, $2.00/conversation, seat tiers, flat platform fees) at the
+   buyer's volume against this platform's **measured** cost per decision. For
+   each plan it computes the resolution rate above which that plan overtakes
+   the pipeline (`breakeven_resolution_rate_pct`) — 3.4% for Fin, 1.7% for
+   Agentforce at 1,500 tickets — which is the number a buyer should argue
+   about, and it names the plans that come out cheaper than us. Rendered as a
+   dashboard panel with its assumptions and caveats inline. This is the single
+   highest-leverage piece of collateral against the per-outcome pricing model.
 
 ### P3 — Polish that the screenshot showed missing
 10. **A UI pass, not a UI fix.** The audit overflow was a symptom of rendering

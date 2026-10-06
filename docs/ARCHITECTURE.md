@@ -99,6 +99,7 @@ Measurement surfaces that watch the same data (no second pipeline):
   GET /api/health              component report (storage → budget posture)
   GET /api/analytics/ab        cycle-time: ai_assisted runs vs manual records
   GET /api/analytics/quality   gate precision from reviews, recall proxy from feedback
+  POST /api/analytics/cost-comparison  published market prices vs our measured cost/decision
 ```
 
 ## Extension points

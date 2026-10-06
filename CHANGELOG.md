@@ -6,6 +6,26 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Market cost comparison** — `POST /api/analytics/cost-comparison` models
+  what the AI-support market's pricing costs at *your* volume against what
+  this platform actually costs per decision, read from the run ledger rather
+  than estimated. Presets carry their published list prices **and their
+  sources** (Intercom Fin $0.99/outcome, Zendesk AI seat tiers + outcome,
+  Agentforce ~$2.00/conversation, Lorikeet $2,100/mo flat) plus a quote-only
+  enterprise preset that refuses to be priced from nothing; any rate can be
+  overridden with a real quote. For each plan it computes the resolution rate
+  above which the plan overtakes the pipeline — the number a buyer should
+  argue about — and the report **names the plans that come out cheaper than
+  us** instead of only reporting wins. Honesty rules are inherited from the
+  rest of the platform: below 20 recorded decisions the measured cost is
+  labelled *indicative*, and in mock mode the report says its token cost is
+  synthetic rather than implying a real invoice was measured. Every result
+  carries its assumptions and caveats, is audited (`cost_comparison_modelled`),
+  and renders as a dashboard panel.
+- **`GET /api/analytics/market-plans`** — the dated list-price snapshot
+  (sources included) so a UI or a buyer can inspect and override it.
+
 ## [v1.5.0] — 2026-10-07 — storage choice, tighter scope, honest dashboard
 
 Three themes: the storage layer stops being a constraint, the knowledge

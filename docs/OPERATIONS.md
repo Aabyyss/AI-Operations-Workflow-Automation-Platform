@@ -183,6 +183,8 @@ change fails CI instead of silently breaking a scheduled refresh.
 | `POST /api/analytics/ab/records` | stamp a manual-cohort cycle time (ticket, label, `cycle_seconds`) |
 | `GET /api/analytics/ab` | ai-assisted vs manual cycle-time distributions; `%` withheld under 5 samples per cohort |
 | `GET /api/analytics/quality` | gate precision (rejected / decided escalations) + recall proxy from thumbs-down auto-resolutions |
+| `GET /api/analytics/market-plans` | dated list-price snapshot for the AI-support vendor presets, each with its source — inspect or override before modelling |
+| `POST /api/analytics/cost-comparison` | model published market pricing at your volume against our **measured** cost per decision: per-plan monthly/annual/per-ticket cost, the resolution rate above which each plan overtakes the pipeline, the plans that beat us, plus assumptions and caveats. Read-only and offline; audited as `cost_comparison_modelled` |
 
 **Role scoping.** Review decisions require the operator or approver key;
 `/api/admin/prune` and knowledge mutations (`POST`/`DELETE /api/knowledge`)

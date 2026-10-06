@@ -9,7 +9,7 @@ An AI-powered platform that answers the questions businesses actually ask:
 Two sides in one system — **AI Product Management** (business case) and
 **AI Integration** (working pipeline + integrations).
 
-[![CI](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml) ![dispositions](https://img.shields.io/badge/tests-165%2F165-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue) ![eval](https://img.shields.io/badge/eval-8%2F8%20routing%20accuracy-brightgreen) ![security](https://img.shields.io/badge/security-auth%20·%20roles%20·%20HMAC%20·%20rate%20limit%20%28opt%2Din%29-blue) ![observability](https://img.shields.io/badge/observability-prometheus%20·%20SSE%20·%20health%20·%20replay%20·%20drift-blue) ![version](https://img.shields.io/badge/version-1.5.0-blue)
+[![CI](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml) ![dispositions](https://img.shields.io/badge/tests-191%2F191-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue) ![eval](https://img.shields.io/badge/eval-8%2F8%20routing%20accuracy-brightgreen) ![security](https://img.shields.io/badge/security-auth%20·%20roles%20·%20HMAC%20·%20rate%20limit%20%28opt%2Din%29-blue) ![observability](https://img.shields.io/badge/observability-prometheus%20·%20SSE%20·%20health%20·%20replay%20·%20drift-blue) ![version](https://img.shields.io/badge/version-1.5.0-blue)
 
 ---
 
@@ -71,10 +71,11 @@ backend/
   knowledge.py                corpus CRUD: safe slugs, explicit overwrite, auto-reload
   ab_testing.py               ai vs manual cycle-time cohorts (honest-sample gated)
   quality_gate.py             gate precision + recall proxy from outcomes
+  cost_compare.py             published market prices vs our measured cost/decision
   integrations/               CRM, email, billing, Slack + audit log
 knowledge_base/               company policies (RAG corpus — editable over the API)
 n8n/workflows/                importable ticket-intake bridge workflow
-tests/                        165 tests: governance, contracts, security, storage, analytics
+tests/                        191 tests: governance, contracts, security, storage, analytics
 ```
 
 ## API tour
@@ -87,6 +88,8 @@ curl localhost:8000/api/reviews                          # pending human approva
 curl -X POST localhost:8000/api/reviews/<id>/decision \
   -d '{"reviewer":"amy","note":"APPROVE"}'
 curl localhost:8000/api/analytics/summary                # Power BI feed
+curl -X POST localhost:8000/api/analytics/cost-comparison \
+  -d '{"monthly_volume":1500,"resolution_rate_pct":50}'  # market list prices vs our measured cost
 ```
 
 ## Deployment
@@ -172,7 +175,7 @@ The questions an operator asks at 2am, answered in code:
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Day-2: config, storage, troubleshooting, backup |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Every collection: writer, shape, retention cap |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Decision log: context → decision → consequence |
-| [docs/TESTING.md](docs/TESTING.md) | What the 165 tests pin, fixtures, CI gates |
+| [docs/TESTING.md](docs/TESTING.md) | What the 191 tests pin, fixtures, CI gates |
 | [docs/COMPETITIVE_ANALYSIS.md](docs/COMPETITIVE_ANALYSIS.md) | Market positioning vs Intercom Fin, Zendesk AI, Sierra, Langfuse, n8n — and where we lose |
 | [marketing/linkedin-post.md](marketing/linkedin-post.md) | Launch copy, hooks, posting checklist |
 | [marketing/demo-dashboard-walkthrough.webm](marketing/demo-dashboard-walkthrough.webm) | Recorded dashboard walkthrough (~55s) + [shot list & narration](marketing/demo-video-shotlist.md) |
@@ -185,5 +188,6 @@ The questions an operator asks at 2am, answered in code:
 - [x] Postgres + pgvector behind the same `Storage` interface (opt-in)
 - [x] Admin-gated knowledge mutations for shared deployments
 - [ ] n8n outbound poller executing the outbox against real vendor APIs
+- [x] Market cost comparison — published list prices vs measured cost per decision
 - [ ] pgvector retrieval cutover behind `AIOPS_RETRIEVAL` (one-file extension point)
 - [ ] Signed decision receipts — one verifiable artifact per decision for auditors
