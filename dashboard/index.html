@@ -234,6 +234,15 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
 <script>
 const $ = (id) => document.getElementById(id);
 const money = (v) => "$" + Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
+// Token costs are sub-cent: a 2-decimal formatter renders every agent as "$0",
+// which reads as "free" instead of "$0.0008". Keep cents for dollars, go to
+// 5 decimals below a cent.
+const usd = (v) => {
+  const n = Number(v) || 0;
+  if (n === 0) return "$0";
+  if (Math.abs(n) >= 0.01) return "$" + n.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
+  return "$" + n.toFixed(5);
+};
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 async function api(path, opts) {
@@ -383,7 +392,7 @@ function renderCosts(usage) {
   });
   const rows = Object.entries(by).sort((a,b)=>b[1].cost-a[1].cost);
   $("cost_tbl").querySelector("tbody").innerHTML = rows.length ? rows.map(([a,c]) =>
-    `<tr><td>${esc(a)}</td><td>${c.calls}</td><td>${c.tin.toLocaleString()} / ${c.tout.toLocaleString()}</td><td>${money(c.cost)}</td></tr>`).join("")
+    `<tr><td>${esc(a)}</td><td>${c.calls}</td><td>${c.tin.toLocaleString()} / ${c.tout.toLocaleString()}</td><td title="$${c.cost.toFixed(8)}">${usd(c.cost)}</td></tr>`).join("")
     : `<tr><td colspan="4" class="muted">No usage recorded yet</td></tr>`;
 }
 
