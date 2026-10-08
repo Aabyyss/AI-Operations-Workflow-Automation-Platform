@@ -246,6 +246,45 @@
   .stack{display:flex; flex-direction:column; gap:var(--sp-3)}
   .btn-row{display:flex; align-items:center; gap:var(--sp-2); flex-wrap:wrap}
 
+  /* ---- Review cards -----------------------------------------------------
+     The queue is where a human decides whether to let an autonomous action
+     execute, so the card leads with the escalation reason and the exact text
+     that will be sent, and only then offers the buttons. */
+  .review{background:var(--surface-2); border:1px solid var(--border);
+          border-radius:var(--r-md); padding:var(--sp-4)}
+  .review + .review{margin-top:var(--sp-3)}
+  .review-head{display:flex; align-items:center; gap:var(--sp-2); flex-wrap:wrap}
+  .review-head .who{font:600 var(--fs-xs)/1.4 var(--font-mono); color:var(--text)}
+  .review-meta{margin-left:auto; display:flex; align-items:center; gap:var(--sp-2);
+               font-size:var(--fs-xs); color:var(--text-subtle);
+               font-variant-numeric:tabular-nums}
+  .review-why{display:flex; gap:var(--sp-2); align-items:baseline;
+              margin-top:var(--sp-3); font-size:var(--fs-sm)}
+  .review-why > b{flex:none; font-size:var(--fs-2xs); text-transform:uppercase;
+                  letter-spacing:var(--track-caps); color:var(--text-subtle);
+                  padding-top:2px}
+  /* The agent's proposed output, set apart from the UI's own voice. */
+  .quote{margin-top:var(--sp-2); padding:var(--sp-3) var(--sp-4);
+         background:var(--surface); border-left:3px solid var(--accent);
+         border-radius:var(--r-xs); font-size:var(--fs-sm);
+         line-height:var(--lh-base); white-space:pre-wrap;
+         overflow-wrap:break-word}
+  .chips{display:flex; gap:var(--sp-2); flex-wrap:wrap}
+
+  /* ---- Run rows --------------------------------------------------------- */
+  .run{display:flex; align-items:center; gap:var(--sp-3);
+       padding:var(--sp-2); border-radius:var(--r-sm); flex-wrap:wrap}
+  .run:hover{background:var(--surface-2)}
+  .run-id{flex:none; font:600 var(--fs-xs)/1.4 var(--font-mono)}
+  .run-subject{flex:1; min-width:120px; font-size:var(--fs-sm);
+               overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .run-age{flex:none; font-size:var(--fs-2xs); color:var(--text-subtle)}
+  .run-actions{display:flex; gap:var(--sp-1); flex:none; margin-left:auto}
+
+  /* An empty panel is a moment of truth: say what it means, not nothing. */
+  .empty-state{padding:var(--sp-6) var(--sp-4); text-align:center;
+               color:var(--text-muted); font-size:var(--fs-sm)}
+
   /* ---- Stat cards ------------------------------------------------------
      A fixed internal shape — eyebrow, value with its unit welded to it, note
      — so nine cards of wildly different number lengths still line up on a
@@ -728,6 +767,18 @@ const moneyShort = (v) => {
     ? "$" + Math.round(n).toLocaleString()
     : "$" + n.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
 };
+// Relative time for lists: an absolute timestamp makes the reader do the
+// subtraction, and "how long has this been waiting" is the actual question.
+const timeAgo = (iso) => {
+  if (!iso) return "";
+  const then = Date.parse(iso);
+  if (!isFinite(then)) return "";
+  const secs = Math.max(0, (Date.now() - then) / 1000);
+  if (secs < 90) return "just now";
+  if (secs < 5400) return `${Math.round(secs / 60)}m ago`;
+  if (secs < 60 * 48) return `${Math.round(secs / 3600)}h ago`;
+  return `${Math.round(secs / 86400)}d ago`;
+};
 // "2778.6m" is a number, not an answer. Operators read durations in units.
 const humanizeMinutes = (m) => {
   const n = Number(m) || 0;
@@ -1086,20 +1137,50 @@ function renderDispositions(s) {
   }).join("") : "No runs yet.";
 }
 
+// Risk bands mirror the gate's own thresholds, and the band is stated in the
+// tooltip rather than implied by a colour alone.
+function riskChip(score) {
+  const n = Number(score);
+  if (!isFinite(n)) return '<span class="pill neutral">risk —</span>';
+  const tone = n >= 0.7 ? "bad" : n >= 0.4 ? "warn" : "ok";
+  const band = n >= 0.7 ? "high (≥0.70)" : n >= 0.4 ? "elevated (≥0.40)" : "low (<0.40)";
+  return `<span class="pill ${tone}" title="Risk band: ${band}">risk ${n.toFixed(2)}</span>`;
+}
+
 function renderReviews(reviews) {
-  if (!reviews.length) { $("reviews_out").innerHTML = '<span class="muted">Queue empty — nothing needs a human right now.</span>'; return; }
+  if (!reviews.length) {
+    $("reviews_out").innerHTML =
+      '<div class="empty-state">Queue empty — nothing needs a human right now.</div>';
+    return;
+  }
+  const tone = {pending: "warn", approved: "ok", rejected: "bad"};
   $("reviews_out").innerHTML = reviews.map(r => `
-    <div style="border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px">
-      <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap">
-        <div><span class="pill ${{pending: "warn", approved: "ok", rejected: "bad"}[r.status] || "neutral"}">${r.status}</span>
-             <b>${esc(r.id)}</b> <span class="muted">for ${esc(r.ticket_id)}</span></div>
-        <div class="muted">risk ${r.risk_score} · ${esc(r.reason||"")}</div>
+    <div class="review">
+      <div class="review-head">
+        <span class="pill ${tone[r.status] || "neutral"}">${esc(r.status)}</span>
+        <span class="who">${esc(r.id)}</span>
+        <span class="muted">for ${esc(r.ticket_id)}</span>
+        <span class="review-meta">
+          ${riskChip(r.risk_score)}
+          <span title="${esc(r.created_at || "")}">${esc(timeAgo(r.created_at))}</span>
+        </span>
       </div>
-      <div style="background:var(--panel2); border-radius:8px; padding:10px; margin-top:8px; font-size:13px">${esc(r.proposed_response)}</div>
-      <div class="muted mt-2">Proposed actions: ${esc((r.proposed_actions||[]).join(", ")||"—")}</div>
-      ${r.status==="pending" ? `<div style="margin-top:8px; display:flex; gap:8px">
-        <button class="approve" onclick="decide('${r.id}', 'APPROVE')">Approve &amp; execute</button>
-        <button class="reject" onclick="decide('${r.id}', 'REJECT')">Reject</button></div>` : ""}
+      <div class="review-why"><b>Why it escalated</b><span>${esc(r.reason || "no reason recorded")}</span></div>
+      <div class="quote">${esc(r.proposed_response)}</div>
+      <div class="chips mt-3">
+        <span class="muted">Proposed actions</span>
+        ${(r.proposed_actions || []).length
+          ? r.proposed_actions.map(a => `<span class="pill neutral plain">${esc(a)}</span>`).join("")
+          : '<span class="muted">none recorded</span>'}
+      </div>
+      ${r.status === "pending"
+        ? `<div class="mt-3 btn-row">
+             <button class="approve" onclick="decide('${r.id}', 'APPROVE')">Approve &amp; execute</button>
+             <button class="reject" onclick="decide('${r.id}', 'REJECT')">Reject</button>
+             <span class="muted">Approving runs the proposed actions; rejecting closes the request with no side effects.</span>
+           </div>`
+        : `<div class="mt-3 muted">Decided${r.reviewed_by ? " by " + esc(r.reviewed_by) : ""}
+             ${r.reviewed_at ? esc(timeAgo(r.reviewed_at)) : ""}${r.decision_note ? " · " + esc(r.decision_note) : ""}</div>`}
     </div>`).join("");
 }
 
@@ -1170,19 +1251,26 @@ async function deleteKnowledge(docId) {
 }
 
 function renderRuns(tickets) {
-  if (!tickets.length) { $("runs_out").innerHTML = '<span class="muted">No runs yet.</span>'; return; }
+  if (!tickets.length) {
+    $("runs_out").innerHTML =
+      '<div class="empty-state">No runs yet — run a ticket above and it will appear here.</div>';
+    return;
+  }
   lastRuns = tickets;
   const ids = [...new Set(tickets.map(t=>t.id))].slice(-8).reverse();
   $("runs_out").innerHTML = ids.map(id => {
     const t = tickets.find(x=>x.id===id);
-    return `<div style="margin:4px 0; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
-      <b>${esc(id)}</b> <span class="muted">${esc(t.subject||"")}</span>
-      <span class="muted" style="margin-left:auto"></span>
+    return `<div class="run">
+      <span class="run-id">${esc(id)}</span>
+      <span class="run-subject" title="${esc(t.subject || "")}">${esc(t.subject || "no subject")}</span>
+      <span class="run-age" title="${esc(t.created_at || "")}">${esc(timeAgo(t.created_at))}</span>
+      <span class="run-actions">
       <button class="ghost btn-sm" title="Mark this run as correct" aria-label="Mark run ${esc(id)} as correct"
               onclick="giveFeedback('${id}','up')">👍</button>
       <button class="ghost btn-sm" title="Mark this run as wrong and say why" aria-label="Mark run ${esc(id)} as wrong"
               onclick="giveFeedback('${id}','down')">👎</button>
       <button class="ghost btn-sm" onclick="replayRun('${id}')">Replay</button>
+      </span>
     </div>`;
   }).join("");
 }
@@ -1268,7 +1356,7 @@ function renderRun(r) {
     <div class="pill ${pills[r.disposition] || "neutral"}">${r.disposition.replace(/_/g, " ")}</div>
     ${r.review_id ? `<span class="muted"> review ${esc(r.review_id)} queued</span>` : ""}
     <div class="muted mt-1">cost $${(r.total_cost_usd||0).toFixed(5)} · ${r.total_latency_ms} ms · risk ${r.decision?r.decision.risk_score:"—"}</div>
-    ${r.final_response ? `<div style="background:var(--panel2); border-radius:8px; padding:10px; margin-top:8px; font-size:13px">${esc(r.final_response)}</div>` : ""}
+    ${r.final_response ? `<div class="quote mt-2">${esc(r.final_response)}</div>` : ""}
     ${r.error ? `<div class="bad">${esc(r.error)}</div>` : ""}
     <table><tbody>${steps}</tbody></table>`;
 }
