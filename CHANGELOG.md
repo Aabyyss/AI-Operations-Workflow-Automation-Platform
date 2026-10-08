@@ -6,7 +6,54 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Dashboard: a real bright mode, and a design system behind it.** The light
+  palette used to be the dark palette inverted, resolved by an attribute that
+  the header dropdown set — and `auto` worked by *removing* that attribute and
+  letting a media query guess, so an OS set to light got the dark-designed
+  page. Bright mode is now designed as daylight (tinted canvas, white
+  surfaces, elevation instead of lines) and is reached by three preferences —
+  bright / dark / auto — from a segmented switcher whose state is visible
+  without opening anything. The preference resolves to a concrete theme before
+  the first paint, follows the OS while it is still `auto`, and migrates
+  anyone who had stored `light`. Source: [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md).
+- **Dashboard: everything visual now draws from tokens.** A 4px spacing scale,
+  a radius scale, a type scale, motion durations, and a semantic colour
+  vocabulary defined once per theme. No hex, `rgb()` or `hsl()` may live
+  outside the two palette blocks, and both palettes must define exactly the
+  same token names — the classic theming bug is a token added to one and
+  forgotten in the other, which is invisible to whoever added it.
+- **Dashboard: unusable numbers fixed.** `$6,494.5` claimed precision nobody
+  measured (now `$6,495` above a thousand, sub-cent costs keep their digits and
+  lose trailing zeros); `54.981ms` became `55ms`; `oldest 2781.4m` became
+  `46h 26m`; `1 ratings` became `1 rating`.
+- **Dashboard: honesty made structural.** Every toned stat states its band in
+  the tooltip, every status pill carries a shape as well as a hue, and the
+  approval queue states what approving actually does. A colour that silently
+  asserts a target the reader cannot see is the quiet version of the flattery
+  this project avoids.
+- **Dashboard: accessibility.** Thirteen fields were labelled by decoration —
+  a `<label>` above a control with nothing binding them — and are now
+  `for`/`id` linked; there is one focus treatment for everything focusable, a
+  skip link, `aria-live` on the three places that report a result, `aria-label`s
+  on the tables, and `prefers-reduced-motion` support. The primary button's
+  white label was 2.7:1 on the dark theme's accent and is now 6.98:1.
+- **Dashboard: the layout folds and its chrome is typed.** A sticky top bar
+  carrying identity, overall health and the global actions; section titles are
+  titles rather than 60-character uppercase eyebrows; tables right-align their
+  numbers; dispositions render as one composition bar instead of three bars
+  that never summed to anything; inline style attributes fell from 64 to 18.
+
 ### Added
+- **`docs/DESIGN_SYSTEM.md`** — the token layers, the themes, the component
+  inventory and the rules a new component has to follow.
+- **`tests/test_dashboard_theme.py`** — 20 contract tests that act as the
+  compiler this single-file dashboard never had: palette symmetry, no colour
+  literals outside the palettes, computed WCAG contrast on every surface in
+  both themes, the pre-paint theme boot, labelled fields, focus and motion
+  support, and scale ladders with no gaps.
+
+### Added (previous)
 - **Market cost comparison** — `POST /api/analytics/cost-comparison` models
   what the AI-support market's pricing costs at *your* volume against what
   this platform actually costs per decision, read from the run ledger rather

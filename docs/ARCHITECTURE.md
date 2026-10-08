@@ -2,6 +2,13 @@
 
 ## Component map
 
+> The operator UI is a single self-contained file by design (no build step, no
+> CDN — it must run on a machine with nothing but Python and a browser). Its
+> visual layer is a documented token system rather than ad-hoc CSS; see
+> [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md), and
+> [`tests/test_dashboard_theme.py`](../tests/test_dashboard_theme.py) for the
+> rules a machine enforces.
+
 ```text
                      ┌─────────────────────────────┐
                      │  dashboard/index.html       │  operator UI — health strip, quality +

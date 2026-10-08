@@ -1,7 +1,7 @@
 # Testing Guide
 
 What the suite pins, how to run it, and how to extend it without
-weakening it. Current state: **207 tests across 34 files**, green in CI on
+weakening it. Current state: **227 tests across 35 files**, green in CI on
 Python 3.11 / 3.12 / 3.13, plus an eval-quality gate. Everything runs
 offline — no test touches the network.
 
@@ -36,6 +36,7 @@ ship.
 | Cost model honesty | `test_cost_compare.py` | a comparison that silently wins: per-outcome/seat/flat arithmetic, the crossover rate, a quote-only plan priced at zero, and the honesty rules (sample floor, mock-mode caveat, every preset cited, losing plans named). `plans_beaten` and `plans_that_beat_us` are asserted as inverses so neither can quietly count the same outcome |
 | Storage backends | `test_pgstore.py` | SQL shape, insertion order, id-keying, transactional `replace_all`, and pgvector-unavailable degradation — all pinned with offline cursor/connection stubs, so the Postgres path is tested without a database. Also pins that `AIOPS_STORAGE=json` still builds the JSON store, and that a misconfigured Postgres setup fails with an actionable message instead of a stack trace |
 | Delivery & loop | `test_outbound.py`, `test_feedback.py`, `test_replay.py`, `test_stream.py`, `test_metrics_endpoint.py`, `test_reqlog.py`, `test_model_routing.py` | double-send, dead-letter mishandling, replay disposition diffs missing |
+| Dashboard design system | `test_dashboard_theme.py` | the compiler this single-file dashboard never had. A broken `var()` renders as transparent black in one theme only, for the users in that theme, and nothing else catches it. So: both palettes define identical token names (the token added to one palette and forgotten in the other is invisible to whoever added it), no hex/`rgb()`/`hsl()` survives outside them, text and status tints clear computed WCAG contrast on every surface they sit on, the theme is resolved before the first paint, every visible field has a bound label, focus and reduced-motion are respected, and the scale ladders have no gaps. Writing it immediately found `color:#fff` on the primary button — 2.7:1 on the dark theme's accent |
 
 ## 3. Fixtures (`tests/conftest.py`)
 

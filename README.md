@@ -9,7 +9,7 @@ An AI-powered platform that answers the questions businesses actually ask:
 Two sides in one system — **AI Product Management** (business case) and
 **AI Integration** (working pipeline + integrations).
 
-[![CI](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml) ![dispositions](https://img.shields.io/badge/tests-207%2F207-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue) ![eval](https://img.shields.io/badge/eval-8%2F8%20routing%20accuracy-brightgreen) ![security](https://img.shields.io/badge/security-auth%20·%20roles%20·%20HMAC%20·%20rate%20limit%20%28opt%2Din%29-blue) ![observability](https://img.shields.io/badge/observability-prometheus%20·%20SSE%20·%20health%20·%20replay%20·%20drift-blue) ![version](https://img.shields.io/badge/version-1.5.0-blue)
+[![CI](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Aabyyss/AI-Operations-Workflow-Automation-Platform/actions/workflows/ci.yml) ![dispositions](https://img.shields.io/badge/tests-227%2F227-brightgreen) ![mode](https://img.shields.io/badge/default%20mode-mock%20%28no%20API%20keys%29-blue) ![eval](https://img.shields.io/badge/eval-8%2F8%20routing%20accuracy-brightgreen) ![security](https://img.shields.io/badge/security-auth%20·%20roles%20·%20HMAC%20·%20rate%20limit%20%28opt%2Din%29-blue) ![observability](https://img.shields.io/badge/observability-prometheus%20·%20SSE%20·%20health%20·%20replay%20·%20drift-blue) ![version](https://img.shields.io/badge/version-1.5.0-blue)
 
 ---
 
@@ -76,7 +76,7 @@ backend/
   integrations/               CRM, email, billing, Slack + audit log
 knowledge_base/               company policies (RAG corpus — editable over the API)
 n8n/workflows/                importable ticket-intake bridge workflow
-tests/                        207 tests: governance, contracts, security, storage, analytics
+tests/                        227 tests: governance, contracts, security, storage, analytics, dashboard
 ```
 
 ## API tour
@@ -177,7 +177,8 @@ The questions an operator asks at 2am, answered in code:
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Day-2: config, storage, troubleshooting, backup |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Every collection: writer, shape, retention cap |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Decision log: context → decision → consequence |
-| [docs/TESTING.md](docs/TESTING.md) | What the 207 tests pin, fixtures, CI gates |
+| [docs/TESTING.md](docs/TESTING.md) | What the 227 tests pin, fixtures, CI gates |
+| [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | Dashboard design system: tokens, bright/dark themes, components, accessibility rules |
 | [marketing/cost-one-pager.html](marketing/cost-one-pager.html) | Generated buyer one-pager: market list prices vs measured cost, with the crossover rate and where we lose |
 | [docs/COMPETITIVE_ANALYSIS.md](docs/COMPETITIVE_ANALYSIS.md) | Market positioning vs Intercom Fin, Zendesk AI, Sierra, Langfuse, n8n — and where we lose |
 | [marketing/linkedin-post.md](marketing/linkedin-post.md) | Launch copy, hooks, posting checklist |
