@@ -321,12 +321,27 @@
                border:2px solid currentColor; border-top-color:transparent;
                animation:spin .7s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
-  .pill{display:inline-block; padding:2px 9px; border-radius:var(--r-pill);
-        font-size:var(--fs-2xs); font-weight:600; line-height:1.6}
-  .pill.auto,.pill.approved{background:var(--pill-auto-bg); color:var(--good)}
-  .pill.review{background:var(--pill-review-bg); color:var(--warn)}
-  .pill.rejected{background:var(--pill-rejected-bg); color:var(--bad)}
-  .pill.pending{background:var(--pill-pending-bg); color:var(--muted)}
+  /* ---- Status pills -----------------------------------------------------
+     One semantic vocabulary — ok / warn / bad / info / neutral — in place of
+     the ad-hoc names that had grown (.pill.auto meant "good", which is not a
+     thing a reader can guess). The old names stay as aliases so nothing in
+     flight breaks.
+
+     Each pill also carries a shape, not just a hue, so status survives
+     colour-blindness and a greyscale printout. `.plain` opts out for chips
+     that are really links. */
+  .pill{display:inline-flex; align-items:center; gap:6px; padding:2px 10px;
+        border-radius:var(--r-pill); font-size:var(--fs-2xs); font-weight:600;
+        line-height:1.7; white-space:nowrap}
+  .pill::before{content:""; flex:none; width:6px; height:6px;
+                border-radius:50%; background:currentColor}
+  .pill.plain::before{display:none}
+  .pill.ok,.pill.auto,.pill.approved{background:var(--good-soft); color:var(--good)}
+  .pill.warn,.pill.review{background:var(--warn-soft); color:var(--warn)}
+  .pill.bad,.pill.rejected,.pill.failed{background:var(--bad-soft); color:var(--bad)}
+  .pill.info{background:var(--accent-soft); color:var(--accent)}
+  .pill.neutral,.pill.pending{background:var(--neutral-soft);
+                               color:var(--text-muted)}
   /* ---- Form controls ----------------------------------------------------
      Fields sit on their own surface token rather than the card's inset
      colour, so an editable box reads as editable in both themes. Focus is a
@@ -428,7 +443,7 @@
       </span>
     </div>
     <div class="topbar-actions">
-      <span id="topbar_status" class="pill pending" aria-live="polite">checking…</span>
+      <span id="topbar_status" class="pill neutral" aria-live="polite">checking…</span>
       <div class="seg" role="group" aria-label="Colour theme">
         <button type="button" data-theme-mode="bright" aria-pressed="false"
                 title="Bright — daylight palette for shared screens"
@@ -625,9 +640,9 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
     <h2>Power BI Feeds · schema-pinned CSV</h2>
     <div class="muted" style="margin-bottom:8px">Scheduled refresh in Power BI is just a GET on these flat files:</div>
     <div style="display:flex; gap:10px; flex-wrap:wrap">
-      <a href="/api/export/runs.csv" class="pill pending" style="text-decoration:none">runs.csv</a>
-      <a href="/api/export/approvals.csv" class="pill pending" style="text-decoration:none">approvals.csv</a>
-      <a href="/api/export/usage.csv" class="pill pending" style="text-decoration:none">usage.csv</a>
+      <a href="/api/export/runs.csv" class="pill neutral plain" style="text-decoration:none">runs.csv</a>
+      <a href="/api/export/approvals.csv" class="pill neutral plain" style="text-decoration:none">approvals.csv</a>
+      <a href="/api/export/usage.csv" class="pill neutral plain" style="text-decoration:none">usage.csv</a>
     </div>
   </div>
 </main>
@@ -772,15 +787,15 @@ function renderTopbarStatus(h) {
   const el = $("topbar_status");
   if (!el) return;
   if (!h || !h.checks) {
-    el.className = "pill pending";
+    el.className = "pill neutral";
     el.textContent = "health unavailable";
     el.title = "The health report could not be read.";
     return;
   }
   const off = Object.entries(h.checks).filter(([, c]) => c.status !== "ok")
     .map(([name, c]) => `${name}: ${c.status}`);
-  el.className = "pill " + (h.status === "ok" ? "auto"
-                           : h.status === "degraded" ? "review" : "rejected");
+  el.className = "pill " + (h.status === "ok" ? "ok"
+                           : h.status === "degraded" ? "warn" : "bad");
   el.textContent = h.status === "ok"
     ? "all checks ok"
     : `${h.status} · ${off.length} check${off.length === 1 ? "" : "s"}`;
@@ -790,11 +805,11 @@ function renderTopbarStatus(h) {
 function renderHealth(h) {
   renderTopbarStatus(h);
   if (!h) { $("health_strip").innerHTML = '<div class="card"><span class="muted">Health report unavailable (older API?).</span></div>'; return; }
-  const cls = {ok: "auto", disabled: "pending", degraded: "review", error: "rejected"};
+  const cls = {ok: "ok", disabled: "neutral", degraded: "warn", error: "bad"};
   const chips = Object.entries(h.checks).map(([name, c]) =>
-    `<span class="pill ${cls[c.status] || "pending"}" title="${esc(name)}: ${esc(c.status)}">${esc(name)}${c.status !== "ok" ? " · " + esc(c.status) : ""}</span>`).join(" ");
-  const overall = h.status === "ok" ? '<span class="pill auto">healthy</span>' :
-    (h.status === "degraded" ? '<span class="pill review">degraded</span>' : '<span class="pill rejected">error</span>');
+    `<span class="pill ${cls[c.status] || "neutral"}" title="${esc(name)}: ${esc(c.status)}">${esc(name)}${c.status !== "ok" ? " · " + esc(c.status) : ""}</span>`).join(" ");
+  const overall = h.status === "ok" ? '<span class="pill ok">healthy</span>' :
+    (h.status === "degraded" ? '<span class="pill warn">degraded</span>' : '<span class="pill bad">error</span>');
   $("health_strip").innerHTML = `<div class="card"><div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">${overall}${chips}</div></div>`;
 }
 
@@ -894,7 +909,7 @@ function renderDrift(d) {
   if (!d) { $("drift_out").innerHTML = '<span class="muted">Drift canary unavailable.</span>'; return; }
   if (d.status === "insufficient_data") { $("drift_out").innerHTML =
     `<span class="muted">Need ${d.required} runs for a baseline comparison (${d.runs_total} so far).</span>`; return; }
-  const badge = d.status === "alert" ? '<span class="pill review">drift alert</span>' : '<span class="pill auto">nominal</span>';
+  const badge = d.status === "alert" ? '<span class="pill bad">drift alert</span>' : '<span class="pill ok">nominal</span>';
   const rows = Object.entries(d.signals).map(([k, s]) =>
     `<tr><td>${esc(k)}</td><td class="num">${s.baseline_pct}%</td><td class="num">${s.recent_pct}%</td><td class="num ${s.alert ? "bad" : ""}">${s.delta_pct > 0 ? "+" : ""}${s.delta_pct}pp</td></tr>`).join("");
   $("drift_out").innerHTML = `${badge}<table style="margin-top:8px"><thead><tr><th></th><th class="num">baseline</th><th class="num">recent</th><th class="num">Δ</th></tr></thead><tbody>${rows}</tbody></table>
@@ -953,10 +968,10 @@ function renderCostCompare(r) {
   const rows = r.plans.map(p => {
     const quoted = p.monthly_usd === null;
     const verdict = quoted
-      ? '<span class="pill pending">quote required</span>'
+      ? '<span class="pill neutral">quote required</span>'
       : (p.verdict === "more_expensive"
-          ? '<span class="pill auto">pipeline is cheaper</span>'
-          : '<span class="pill rejected">plan is cheaper</span>');
+          ? '<span class="pill ok">pipeline is cheaper</span>'
+          : '<span class="pill bad">plan is cheaper</span>');
     const breakeven = p.breakeven_resolution_rate_pct === null
       ? `<span class="muted" title="${esc(p.breakeven_note)}">n/a</span>`
       : `<b title="${esc(p.breakeven_note)}">${p.breakeven_resolution_rate_pct}%</b>`;
@@ -993,7 +1008,7 @@ function renderCostCompare(r) {
           <td class="num">${moneyShort(r.our_annual_usd)}</td>
           <td class="num">${usd(r.our_cost_per_ticket_usd)}</td>
           <td><span class="muted">flat — pays per decision, not per resolution</span></td>
-          <td><span class="pill auto">every ticket, resolved or not</span></td>
+          <td><span class="pill info">every ticket, resolved or not</span></td>
         </tr></tbody>
     </table>
     <details style="margin-top:10px">
@@ -1021,7 +1036,7 @@ function renderReviews(reviews) {
   $("reviews_out").innerHTML = reviews.map(r => `
     <div style="border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px">
       <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap">
-        <div><span class="pill ${r.status}">${r.status}</span>
+        <div><span class="pill ${{pending: "warn", approved: "ok", rejected: "bad"}[r.status] || "neutral"}">${r.status}</span>
              <b>${esc(r.id)}</b> <span class="muted">for ${esc(r.ticket_id)}</span></div>
         <div class="muted">risk ${r.risk_score} · ${esc(r.reason||"")}</div>
       </div>
@@ -1146,7 +1161,7 @@ async function analyze() {
     const a = await api("/api/analyze", {method:"POST", body:JSON.stringify(body)});
     const c = a.costs;
     $("analysis_out").innerHTML = `
-      <div class="pill ${a.score.verdict==="high_potential"?"auto":a.score.verdict==="moderate"?"review":"rejected"}">${a.score.verdict}</div>
+      <div class="pill ${a.score.verdict === "high_potential" ? "ok" : a.score.verdict === "moderate" ? "warn" : "bad"}">${a.score.verdict.replace(/_/g, " ")}</div>
       <b> Automation score ${a.score.total}/100</b>
       <div class="muted">${esc(a.score.rationale)}</div>
       <table style="margin-top:8px">
@@ -1168,7 +1183,7 @@ async function designWorkflow(processId) {
   try {
     const d = await api("/api/workflows/design", {method:"POST", body:JSON.stringify({process_id: processId})});
     $("design_out").innerHTML = `
-      <div class="pill auto">n8n workflow ready</div>
+      <div class="pill ok">n8n workflow ready</div>
       <b> ${esc(d.name)}</b>
       <div class="muted" style="margin-top:4px">${d.node_count} nodes · intake webhook → agentic pipeline → risk-gated escalation, hourly monitoring digest, AI-mapping note embedded.</div>
       <div style="margin-top:8px"><a href="/api/workflows/${d.id}/download" download="workflow.json"><button class="ghost">Download JSON for n8n import</button></a></div>`;
@@ -1192,10 +1207,10 @@ async function demoTicket() {
 }
 
 function renderRun(r) {
-  const pills = {auto_resolved:"auto", human_review:"review", approved_executed:"approved", rejected:"rejected", failed:"rejected"};
-  const steps = (r.trace||[]).map(t => `<tr><td>${esc(t.agent)}</td><td>${t.duration_ms} ms</td><td>${esc(truncate(t.output_summary, 90))}</td></tr>`).join("");
-  $("ticket_out").innerHTML = `
-    <div class="pill ${pills[r.disposition]||"pending"}">${r.disposition}</div>
+  const pills = {auto_resolved: "ok", human_review: "warn", approved_executed: "ok",
+                 rejected: "bad", failed: "bad"};
+  const steps = (r.trace||[]).map(t => `<tr><td>${esc(t.agent)}</td><td>${t.duration_ms} ms</td><td>${esc(truncate(t.output_summary, 90))}</td></tr>`).join("");    $("ticket_out").innerHTML = `
+    <div class="pill ${pills[r.disposition] || "neutral"}">${r.disposition.replace(/_/g, " ")}</div>
     ${r.review_id ? `<span class="muted"> review ${esc(r.review_id)} queued</span>` : ""}
     <div class="muted" style="margin-top:4px">cost $${(r.total_cost_usd||0).toFixed(5)} · ${r.total_latency_ms} ms · risk ${r.decision?r.decision.risk_score:"—"}</div>
     ${r.final_response ? `<div style="background:var(--panel2); border-radius:8px; padding:10px; margin-top:8px; font-size:13px">${esc(r.final_response)}</div>` : ""}

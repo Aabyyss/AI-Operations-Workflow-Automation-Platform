@@ -160,7 +160,8 @@ def test_button_labels_are_readable_on_their_button():
 
 def test_status_tints_carry_their_own_text_colour():
     pairs = (("--good", "--good-soft"), ("--warn", "--warn-soft"),
-             ("--bad", "--bad-soft"))
+             ("--bad", "--bad-soft"), ("--accent", "--accent-soft"),
+             ("--text-muted", "--neutral-soft"))
     for name, tokens in (("dark", _tokens(DARK)), ("bright", _tokens(BRIGHT))):
         for fg, bg in pairs:
             ratio = _contrast(tokens[fg], tokens[bg])
