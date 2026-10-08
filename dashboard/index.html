@@ -107,6 +107,33 @@
   *{box-sizing:border-box; margin:0; padding:0}
   body{background:var(--bg); color:var(--text);
        font:15px/1.5 "Segoe UI", system-ui, sans-serif; padding:24px}
+
+  /* ---- Bright-mode affordances ------------------------------------------
+     The dark theme separates surfaces with lines, because a dark canvas has
+     no light to spend. Bright mode has light to spend, so it separates with
+     elevation instead: a softly tinted canvas under crisp white surfaces,
+     and a shadow ramp carrying the hierarchy that borders used to. */
+  :root[data-theme="light"] body, :root[data-theme="bright"] body{
+    background:
+      radial-gradient(1200px 560px at 50% -12%,
+                      #ffffff 0%, rgba(255,255,255,0) 60%),
+      linear-gradient(180deg, #f3f7fd 0%, var(--canv) 44%);
+    background-attachment:fixed;
+  }
+  :root[data-theme="light"] .card, :root[data-theme="bright"] .card{
+    box-shadow:var(--shadow-1);
+  }
+
+  ::selection{background:var(--accent); color:var(--on-accent)}
+
+  /* Themed scrollbars: the default OS bar is the one piece of chrome that
+     stays stubbornly dark inside a bright page. */
+  *{scrollbar-width:thin; scrollbar-color:var(--border-2) transparent}
+  ::-webkit-scrollbar{width:11px; height:11px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--border-2); border-radius:var(--r-pill);
+                            border:3px solid transparent; background-clip:content-box}
+  ::-webkit-scrollbar-thumb:hover{background:var(--text-subtle); background-clip:content-box}
   h1{font-size:22px; font-weight:600}
   h2{font-size:15px; font-weight:600; color:var(--muted);
      text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px}
@@ -372,21 +399,40 @@ async function api(path, opts) {
 // AIOPS_API_KEY:  localStorage.setItem("aiops_api_key", "<key>")
 window.setApiKey = (k) => { localStorage.setItem("aiops_api_key", k); location.reload(); };
 
-// Theme: "auto" follows the OS; light/dark override it. Persisted.
-function applyTheme(mode) {
-  const root = document.documentElement;
-  if (mode === "auto") root.removeAttribute("data-theme");
-  else root.setAttribute("data-theme", mode);
+// Theme: "auto" follows the OS, bright/dark pin it. Persisted under aiops_theme.
+//
+// "auto" is resolved to a concrete theme and written to the attribute, so the
+// stylesheet never has to answer "am I light right now?" in a media query. That
+// keeps the bright theme to one code path — OS-driven and explicitly-pinned
+// bright users get byte-identical CSS, which is the only way a second theme
+// stays correct as the first one is edited.
+const prefersBright = () =>
+  window.matchMedia("(prefers-color-scheme: light)").matches;
+
+function resolveTheme(mode) {
+  if (mode === "light") mode = "bright";  // value stored by older builds
+  if (mode === "bright" || mode === "dark") return mode;
+  return prefersBright() ? "bright" : "dark";
 }
+
+function applyTheme(mode) {
+  const resolved = resolveTheme(mode);
+  document.documentElement.setAttribute("data-theme", resolved);
+  return resolved;
+}
+
 function setTheme(mode) {
   localStorage.setItem("aiops_theme", mode);
   applyTheme(mode);
 }
+
+// Follow the OS while — and only while — the preference is still "auto".
+window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
+  if ((localStorage.getItem("aiops_theme") || "auto") === "auto") applyTheme("auto");
+});
+
 (function () {
-  const mode = localStorage.getItem("aiops_theme") || "auto";
-  applyTheme(mode);
-  const sel = document.getElementById("theme_select");
-  if (sel) sel.value = mode;
+  applyTheme(localStorage.getItem("aiops_theme") || "auto");
 })();
 
 async function loadAll() {
