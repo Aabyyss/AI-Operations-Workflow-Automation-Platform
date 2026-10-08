@@ -59,7 +59,7 @@
     --ease:cubic-bezier(.2,.7,.3,1);
     --dur-fast:120ms; --dur:180ms;
     /* layout */
-    --page-max:1260px;
+    --header-h:60px; --content-max:1180px;
   }
 
   /* ---- Dark (default) ---- */
@@ -86,6 +86,8 @@
     --shadow-3:0 18px 44px -18px rgba(0,0,0,.75);
     --ring:0 0 0 3px rgba(109,155,255,.4);
     --scrim:rgba(4,7,16,.72);
+    --accent-2:#8f6dff;
+    --topbar-bg:rgba(10,14,28,.76);
     --page-bg:var(--canv);
     /* legacy aliases — kept until every inline style is migrated to a class */
     --bg:var(--canv); --panel:var(--surface); --panel2:var(--surface-2);
@@ -122,6 +124,8 @@
     --shadow-3:0 24px 48px -20px rgba(16,32,72,.3);
     --ring:0 0 0 3px rgba(42,95,224,.32);
     --scrim:rgba(15,23,41,.38);
+    --accent-2:#7a4de0;
+    --topbar-bg:rgba(255,255,255,.82);
     /* The whole page background as one token, so no colour literal has to
        live outside a theme block — a wash and a tint, then the flat canvas. */
     --page-bg:
@@ -133,10 +137,42 @@
     --pill-rejected-bg:var(--bad-soft); --pill-pending-bg:var(--neutral-soft);
   }
   *{box-sizing:border-box; margin:0; padding:0}
+  /* Anchors and focused controls must not land underneath the sticky bar. */
+  html{scroll-padding-top:calc(var(--header-h) + var(--sp-4));
+       -webkit-text-size-adjust:100%}
   body{background:var(--page-bg); background-attachment:fixed;
        color:var(--text);
-       font:var(--fs-md)/var(--lh-base) var(--font); padding:24px;
+       font:var(--fs-md)/var(--lh-base) var(--font);
        -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility}
+
+  /* ---- App shell --------------------------------------------------------
+     A sticky bar that carries identity and global actions, so scrolling a
+     long monitoring page never strands the reader without a way to refresh
+     or change theme. */
+  .topbar{position:sticky; top:0; z-index:30; background:var(--topbar-bg);
+          backdrop-filter:blur(14px) saturate(150%);
+          -webkit-backdrop-filter:blur(14px) saturate(150%);
+          border-bottom:1px solid var(--border)}
+  /* Same max-width as the content, so the brand mark lines up with the cards
+     rather than floating 40px to their left. */
+  .topbar-inner{max-width:var(--content-max); margin:0 auto;
+                padding:var(--sp-3) var(--sp-6);
+                display:flex; align-items:center; gap:var(--sp-5);
+                flex-wrap:wrap; min-height:var(--header-h)}
+  .brand{display:flex; align-items:center; gap:var(--sp-3); min-width:0}
+  .mark{width:34px; height:34px; flex:none; display:grid; place-items:center;
+        border-radius:var(--r-md); color:var(--on-accent);
+        background:linear-gradient(140deg, var(--accent), var(--accent-2));
+        box-shadow:var(--shadow-1)}
+  .mark svg{width:19px; height:19px}
+  .brand-text{display:flex; flex-direction:column; min-width:0}
+  .brand-name{font-size:var(--fs-lg); font-weight:600; letter-spacing:-.015em;
+              line-height:1.25}
+  .brand-tag{font-size:var(--fs-xs); color:var(--text-muted)}
+  .topbar-actions{display:flex; align-items:center; gap:var(--sp-2);
+                  margin-left:auto}
+  .wrap{max-width:var(--content-max); margin:0 auto;
+        padding:var(--sp-6) var(--sp-6) var(--sp-9)}
 
   /* ---- Bright-mode affordances ------------------------------------------
      The dark theme separates surfaces with lines, because a dark canvas has
@@ -181,7 +217,6 @@
   h2{font-size:var(--fs-2xs); font-weight:700; color:var(--text-subtle);
      text-transform:uppercase; letter-spacing:var(--track-caps);
      margin-bottom:var(--sp-3)}
-  .wrap{max-width:1180px; margin:0 auto}
   .row{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px}
   .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin:14px 0}
   .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px}
@@ -257,13 +292,23 @@
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px">
-    <div>
-      <h1>AI Operations &amp; Workflow Automation Platform</h1>
-      <div class="muted">Should we automate this? · How do we run it safely? · Is it actually working?</div>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="6" cy="6" r="2.6"/><circle cx="18" cy="18" r="2.6"/>
+          <path d="M8.6 6H15a2 2 0 0 1 2 2v7.4"/>
+        </svg>
+      </span>
+      <span class="brand-text">
+        <h1 class="brand-name">AI Operations &amp; Workflow Automation Platform</h1>
+        <span class="brand-tag">Should we automate this? · How do we run it safely? · Is it actually working?</span>
+      </span>
     </div>
-    <div style="display:flex; gap:8px; align-items:center">
+    <div class="topbar-actions">
+      <span id="topbar_status" class="pill pending" aria-live="polite">checking…</span>
       <div class="seg" role="group" aria-label="Colour theme">
         <button type="button" data-theme-mode="bright" aria-pressed="false"
                 title="Bright — daylight palette for shared screens"
@@ -287,7 +332,9 @@
       <button class="ghost" onclick="loadAll()">Refresh</button>
     </div>
   </div>
+</header>
 
+<main class="wrap">
   <div class="cards" id="kpis"></div>
   <div id="health_strip"></div>
 
@@ -445,7 +492,7 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
       <a href="/api/export/usage.csv" class="pill pending" style="text-decoration:none">usage.csv</a>
     </div>
   </div>
-</div>
+</main>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -556,7 +603,29 @@ async function loadAll() {
   } catch (e) { console.error(e); }
 }
 
+// The shell carries the one thing an operator needs before scrolling: is the
+// platform well? Detail stays in the health strip.
+function renderTopbarStatus(h) {
+  const el = $("topbar_status");
+  if (!el) return;
+  if (!h || !h.checks) {
+    el.className = "pill pending";
+    el.textContent = "health unavailable";
+    el.title = "The health report could not be read.";
+    return;
+  }
+  const off = Object.entries(h.checks).filter(([, c]) => c.status !== "ok")
+    .map(([name, c]) => `${name}: ${c.status}`);
+  el.className = "pill " + (h.status === "ok" ? "auto"
+                           : h.status === "degraded" ? "review" : "rejected");
+  el.textContent = h.status === "ok"
+    ? "all checks ok"
+    : `${h.status} · ${off.length} check${off.length === 1 ? "" : "s"}`;
+  el.title = off.join("\n") || "all checks ok";
+}
+
 function renderHealth(h) {
+  renderTopbarStatus(h);
   if (!h) { $("health_strip").innerHTML = '<div class="card"><span class="muted">Health report unavailable (older API?).</span></div>'; return; }
   const cls = {ok: "auto", disabled: "pending", degraded: "review", error: "rejected"};
   const chips = Object.entries(h.checks).map(([name, c]) =>

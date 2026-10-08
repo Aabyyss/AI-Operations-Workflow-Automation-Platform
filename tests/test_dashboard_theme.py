@@ -208,5 +208,29 @@ def test_dashboard_stays_self_contained():
 def test_design_tokens_define_scales_not_just_colours():
     scales = _tokens(_block(":root"))
     for token in ("--sp-4", "--r-md", "--fs-md", "--ease", "--dur-fast",
-                  "--page-max", "--font-mono"):
+                  "--content-max", "--header-h", "--font-mono"):
         assert token in scales, token
+
+
+def test_scale_ladders_have_no_gaps():
+    """A scale is only useful if it is complete: the step you need is never
+    missing, so nobody invents 17px or --sp-4a. A gap is the start of the
+    next set of hand-tuned values."""
+    scales = _tokens(_block(":root"))
+    ladders = {
+        "--sp-": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        "--fs-": ["2xs", "xs", "sm", "md", "lg", "xl", "2xl", "3xl"],
+        "--r-": ["xs", "sm", "md", "lg", "xl", "pill"],
+    }
+    for prefix, steps in ladders.items():
+        missing = [f"{prefix}{s}" for s in steps if f"{prefix}{s}" not in scales]
+        assert not missing, missing
+    # Elevation is a ladder per theme, not a per-component decision.
+    for name, tokens in (("dark", _tokens(DARK)), ("bright", _tokens(BRIGHT))):
+        assert all(f"--shadow-{n}" in tokens for n in (1, 2, 3)), name
+
+
+def test_spacing_scale_ascends():
+    scales = _tokens(_block(":root"))
+    values = [float(scales[f"--sp-{n}"].replace("px", "")) for n in range(1, 10)]
+    assert values == sorted(values) and len(set(values)) == 9, values
