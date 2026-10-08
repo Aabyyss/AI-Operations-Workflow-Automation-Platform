@@ -320,12 +320,50 @@
   .stat.bad::after{background:var(--bad)}
   .card{background:var(--surface); border:1px solid var(--border);
         border-radius:var(--r-lg); padding:var(--sp-5); min-width:0}
-  .kpi{font-size:var(--fs-2xl); font-weight:700; margin-top:2px;
-       letter-spacing:-.02em; line-height:var(--lh-tight);
-       font-variant-numeric:tabular-nums}
-  .kpi small{font-size:var(--fs-sm); color:var(--text-muted); font-weight:400;
-             letter-spacing:0}
   .muted{color:var(--text-muted); font-size:var(--fs-sm); line-height:var(--lh-snug)}
+
+  /* ---- Readouts ---------------------------------------------------------
+     Label / value / unit, reused by every panel that shows a number with a
+     caption, so the budget meter and the quality gate agree on what a number
+     looks like. Replaces the ad-hoc .kpi blocks. */
+  .metric-grid{display:grid; gap:var(--sp-4);
+               grid-template-columns:repeat(auto-fit,minmax(148px,1fr))}
+  .metric{display:flex; flex-direction:column; gap:2px; min-width:0}
+  .metric-label{font-size:var(--fs-2xs); font-weight:700; color:var(--text-subtle);
+                text-transform:uppercase; letter-spacing:var(--track-caps)}
+  .metric-value{font-size:var(--fs-2xl); font-weight:700; letter-spacing:-.02em;
+                line-height:1.1; font-variant-numeric:tabular-nums}
+  .metric-sub{font-size:var(--fs-xs); color:var(--text-muted)}
+  .note{font-size:var(--fs-xs); color:var(--text-muted); line-height:var(--lh-snug)}
+
+  /* ---- Meters and proportions ------------------------------------------ */
+  .meter{margin-top:var(--sp-2)}
+  .meter-head{display:flex; align-items:baseline; justify-content:space-between;
+              gap:var(--sp-2); font-size:var(--fs-sm)}
+  .meter-head b{font-variant-numeric:tabular-nums}
+  .meter-track{position:relative; height:10px; margin-top:var(--sp-1);
+               background:var(--surface-2); border:1px solid var(--border);
+               border-radius:var(--r-pill); overflow:hidden}
+  .meter-fill{display:block; height:100%; background:var(--accent);
+              border-radius:var(--r-pill)} .meter-fill.ease{transition:width var(--dur) var(--ease)}
+  .meter-fill.good{background:var(--good)} .meter-fill.warn{background:var(--warn)}
+  .meter-fill.bad{background:var(--bad)}
+  /* A composition bar: one 100% track, so the parts and the whole are legible
+     in the same glance. Three bars each starting at zero made the reader
+     compare lengths that never summed to anything. */
+  .stacked{display:flex; height:12px; margin-top:var(--sp-2); overflow:hidden;
+           background:var(--surface-2); border:1px solid var(--border);
+           border-radius:var(--r-pill)}
+  .stacked > i{display:block; height:100%; background:var(--accent)}
+  .stacked > i.auto{background:var(--good)}
+  .stacked > i.review{background:var(--warn)}
+  .legend{display:flex; gap:var(--sp-4); flex-wrap:wrap; margin-top:var(--sp-3);
+          font-size:var(--fs-xs); color:var(--text-muted)}
+  .legend-item{display:inline-flex; align-items:center; gap:var(--sp-2)}
+  .legend-dot{flex:none; width:9px; height:9px; border-radius:3px;
+              background:var(--accent)}
+  .legend-dot.auto{background:var(--good)}
+  .legend-dot.review{background:var(--warn)}
   /* Every number the reader might compare with the number above it. */
   th,td,.num{font-variant-numeric:tabular-nums}
   .good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
@@ -466,9 +504,7 @@
       max-height:220px; white-space:pre-wrap;
       font:var(--fs-xs)/1.55 var(--font-mono)}
   .hidden{display:none}
-  .bar{height:8px; background:var(--panel2); border-radius:99px; overflow:hidden; margin-top:6px}
-  .bar>i{display:block; height:100%; background:var(--accent)}
-  .bar>i.g{background:var(--good)} .bar>i.w{background:var(--warn)}
+
   code{background:var(--surface-2); border:1px solid var(--border);
        border-radius:var(--r-xs); padding:1px 6px;
        font:var(--fs-xs)/1.5 var(--font-mono); color:var(--text)}
@@ -921,29 +957,57 @@ function renderHealth(h) {
 
 function renderQuality(q) {
   if (!q) { $("quality_out").innerHTML = '<span class="muted">Quality metrics unavailable.</span>'; return; }
-  const fmt = (v, suffix) => v === null || v === undefined ? "—" : v + (suffix || "");
+  const pct = (v) => v === null || v === undefined ? "—" : Math.round(v * 100) + "%";
   $("quality_out").innerHTML = `
-    <div style="display:flex; gap:22px; flex-wrap:wrap">
-      <div><div class="muted">Gate precision</div><div class="kpi">${fmt(q.gate_precision === null ? null : Math.round(q.gate_precision * 100))}<small>% escalations rejected</small></div></div>
-      <div><div class="muted">Recall proxy</div><div class="kpi">${fmt(q.gate_recall_proxy === null ? null : Math.round(q.gate_recall_proxy * 100))}<small>% auto-runs flagged</small></div></div>
+    <div class="metric-grid">
+      <div class="metric">
+        <div class="metric-label">Gate precision</div>
+        <div class="metric-value">${pct(q.gate_precision)}</div>
+        <div class="metric-sub">of escalations, the share rejected</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Recall proxy</div>
+        <div class="metric-value">${pct(q.gate_recall_proxy)}</div>
+        <div class="metric-sub">of auto-runs, the share later flagged</div>
+      </div>
     </div>
-    <div class="muted mt-2">${q.escalations_decided} decided (${q.reviewer_approved} approved / ${q.reviewer_rejected} rejected) · ${q.escalations_pending} pending · ${q.auto_resolved_total} auto-resolved, ${q.flagged_by_feedback} flagged by feedback</div>
-    <div class="muted mt-1">${esc(q.note)}</div>`;
+    <div class="note mt-3">
+      ${plural(q.escalations_decided, "escalation")} decided
+      (${q.reviewer_approved} approved / ${q.reviewer_rejected} rejected) ·
+      ${plural(q.escalations_pending, "pending")} ·
+      ${plural(q.auto_resolved_total, "auto-resolution")} ·
+      ${plural(q.flagged_by_feedback, "flagged by feedback", "flagged by feedback")}
+    </div>
+    <div class="note mt-1">${esc(q.note)}</div>`;
 }
 
 function renderAB(a) {
   if (!a) { $("ab_out").innerHTML = '<span class="muted">A/B metrics unavailable.</span>'; return; }
   const sec = (s) => s === null || s === undefined ? "—" : (s >= 90 ? Math.round(s / 60) + "m " + Math.round(s % 60) + "s" : Math.round(s) + "s");
   if (!a.sample_sufficient) {
-    $("ab_out").innerHTML = `<span class="muted">Need ≥ ${a.min_cohort_size} timed tickets per cohort before a delta is meaningful.\n      ai_assisted: ${a.ai_assisted.count} · manual: ${a.manual.count}.</span>`;
+    $("ab_out").innerHTML = `
+      <div class="empty-state" style="padding:var(--sp-4) 0">
+        Needs ≥ ${esc(a.min_cohort_size)} timed tickets per cohort before a delta means anything.
+      </div>
+      <div class="note">AI-assisted: ${plural(a.ai_assisted.count, "ticket")} ·
+        manual: ${plural(a.manual.count, "ticket")}.</div>`;
     return;
   }
   $("ab_out").innerHTML = `
-    <div style="display:flex; gap:22px; flex-wrap:wrap">
-      <div><div class="muted">AI-assisted median</div><div class="kpi">${sec(a.ai_assisted.median_seconds)}<small>p90 ${sec(a.ai_assisted.p90_seconds)}</small></div></div>
-      <div><div class="muted">Manual median</div><div class="kpi">${sec(a.manual.median_seconds)}<small>p90 ${sec(a.manual.p90_seconds)}</small></div></div>
+    <div class="metric-grid">
+      <div class="metric">
+        <div class="metric-label">AI-assisted median</div>
+        <div class="metric-value">${sec(a.ai_assisted.median_seconds)}</div>
+        <div class="metric-sub">p90 ${sec(a.ai_assisted.p90_seconds)}</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Manual median</div>
+        <div class="metric-value">${sec(a.manual.median_seconds)}</div>
+        <div class="metric-sub">p90 ${sec(a.manual.p90_seconds)}</div>
+      </div>
     </div>
-    <div  class="good mt-2">AI path ~${a.ai_faster_pct}% faster on median cycle time (${sec(a.median_delta_seconds)} saved per ticket)</div>`;
+    <div class="note mt-3 good">AI path ~${esc(a.ai_faster_pct)}% faster on median cycle time
+      (${sec(a.median_delta_seconds)} saved per ticket)</div>`;
 }
 
 // Threshold bands for tone. Deliberately conservative: a stat only gets a
@@ -1004,11 +1068,18 @@ function renderBudget(b) {
   if (!b || !b.enabled) { $("budget_out").innerHTML =
     '<span class="muted">No budget configured. Set <code>AIOPS_MONTHLY_BUDGET_USD</code> to enable spend tracking and alerts.</span>'; return; }
   const pct = Math.min(100, b.utilization_pct || 0);
-  const cls = b.alert ? "w" : "g";
   $("budget_out").innerHTML = `
-    <div class="kpi">$${Number(b.spent_usd).toFixed(4)}<small> of $${b.budget_usd} · ${b.utilization_pct}%</small></div>
-    <div class="bar"><i class="${cls}" style="width:${pct}%"></i></div>
-    <div class="muted mt-2">Projected month: $${b.projected_month_usd} ${b.alert ? '· <span class="warn">alert: projection exceeds budget</span>' : ''}</div>`;
+    <div class="metric">
+      <div class="metric-label">Spent this month</div>
+      <div class="metric-value">${usd(b.spent_usd)}<span class="metric-sub"> of $${esc(b.budget_usd)}</span></div>
+    </div>
+    <div class="meter">
+      <div class="meter-head"><span>Budget used</span><b>${esc(b.utilization_pct)}%</b></div>
+      <div class="meter-track"><span class="meter-fill ease ${b.alert ? "warn" : "good"}"
+        style="width:${pct}%" title="${esc(b.utilization_pct)}% of the $${esc(b.budget_usd)} monthly budget"></span></div>
+    </div>
+    <div class="note mt-2">Projected month: <b>$${esc(b.projected_month_usd)}</b>${b.alert
+      ? ' · <span class="warn">projection exceeds the budget</span>' : " · within budget"}</div>`;
 }
 
 function renderDrift(d) {
@@ -1096,9 +1167,13 @@ function renderCostCompare(r) {
     ? ` · <span class="warn">beaten by ${r.plans_that_beat_us.map(esc).join(", ")}</span>` : "";
 
   $("cc_out").innerHTML = `
-    <div class="kpi">${money(r.our_monthly_usd)}<small> / month · ${usd(r.our_cost_per_ticket_usd)} per
-      ticket · cheaper than ${r.plans_beaten} of ${priced.length} modelled plans${lost}</small></div>
-    <div class="muted mt-1">
+    <div class="metric">
+      <div class="metric-label">This pipeline</div>
+      <div class="metric-value">${moneyShort(r.our_monthly_usd)}
+        <span class="metric-sub">/ month · ${usd(r.our_cost_per_ticket_usd)} per ticket ·
+        cheaper than ${r.plans_beaten} of ${priced.length} modelled plans${lost}</span></div>
+    </div>
+    <div class="note mt-2">
       From <b>${r.measured_from_decisions}</b> recorded decision(s) ·
       <span class="${basis[1]}">${basis[0]}</span> ·
       <span class="${r.mode === "live" ? "good" : "warn"}">${esc(r.mode)} mode</span>${
@@ -1130,11 +1205,27 @@ function renderCostCompare(r) {
 function renderDispositions(s) {
   const d = s.dispositions || {};
   const entries = Object.entries(d);
-  $("disp_out").innerHTML = entries.length ? entries.map(([k,v]) => {
-    const cls = k.includes("auto") ? "g" : (k.includes("review") ? "w" : "");
-    const pct = Math.round(100*v/Math.max(1, Object.values(d).reduce((a,b)=>a+b,0)));
-    return `<div style="margin:6px 0"><div class="muted">${esc(k)} — ${v} (${pct}%)</div><div class="bar"><i class="${cls}" style="width:${pct}%"></i></div></div>`;
-  }).join("") : "No runs yet.";
+  const total = Object.values(d).reduce((a, b) => a + b, 0);
+  if (!entries.length || !total) {
+    $("disp_out").innerHTML =
+      '<div class="empty-state">No runs yet — dispositions appear here once tickets have been processed.</div>';
+    return;
+  }
+  const toneOf = (k) => k.includes("auto") ? "auto" : (k.includes("review") ? "review" : "");
+  // Largest first, so the bar reads as a ranking rather than as hash order.
+  const ordered = entries.map(([k, v]) => [k, v, Math.round(100 * v / total)])
+    .sort((a, b) => b[1] - a[1]);
+  $("disp_out").innerHTML = `
+    <div class="legend" style="margin-top:0">
+      ${ordered.map(([k, v, pct]) => `<span class="legend-item">
+        <span class="legend-dot ${toneOf(k)}"></span>${esc(k.replace(/_/g, " "))}
+        <b style="color:var(--text)">${v}</b> <span>${pct}%</span></span>`).join("")}
+    </div>
+    <div class="stacked">
+      ${ordered.map(([k, v, pct]) => `<i class="${toneOf(k)}" style="width:${pct}%"
+        title="${esc(k.replace(/_/g, " "))}: ${v} of ${total} (${pct}%)"></i>`).join("")}
+    </div>
+    <div class="note mt-2">${plural(total, "run")} across ${plural(ordered.length, "disposition")}.</div>`;
 }
 
 // Risk bands mirror the gate's own thresholds, and the band is stated in the
