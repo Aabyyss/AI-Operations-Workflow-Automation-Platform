@@ -4,6 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Operations &amp; Workflow Automation Platform</title>
+<script>
+/* Resolve the theme before the first paint. Doing this in the main script at
+   the end of <body> would paint the dark default first and snap to bright a
+   frame later — the flash every themable app ships by accident. */
+(function () {
+  var root = document.documentElement;
+  try {
+    var mode = localStorage.getItem("aiops_theme") || "auto";
+    if (mode === "light") {          // renamed to "bright"; migrate in place
+      mode = "bright";
+      localStorage.setItem("aiops_theme", mode);
+    }
+    if (mode !== "bright" && mode !== "dark") {
+      mode = window.matchMedia("(prefers-color-scheme: light)").matches
+        ? "bright" : "dark";
+    }
+    root.setAttribute("data-theme", mode);
+  } catch (e) {
+    root.setAttribute("data-theme", "dark");   // private mode, no storage
+  }
+})();
+</script>
 <style>
   /* ==========================================================================
      Design tokens.
@@ -64,6 +86,7 @@
     --shadow-3:0 18px 44px -18px rgba(0,0,0,.75);
     --ring:0 0 0 3px rgba(109,155,255,.4);
     --scrim:rgba(4,7,16,.72);
+    --page-bg:var(--canv);
     /* legacy aliases — kept until every inline style is migrated to a class */
     --bg:var(--canv); --panel:var(--surface); --panel2:var(--surface-2);
     --line:var(--border); --muted:var(--text-muted); --on-good:#06281a;
@@ -76,7 +99,7 @@
      a tinted canvas so white cards read as raised, a single saturated accent
      for meaning, and a shadow ramp strong enough to carry hierarchy without
      borders doing all the work. */
-  :root[data-theme="light"], :root[data-theme="bright"]{
+  :root[data-theme="bright"]{
     color-scheme: light;
     --canv:#eef2f9;
     --surface:#ffffff;
@@ -99,30 +122,27 @@
     --shadow-3:0 24px 48px -20px rgba(16,32,72,.3);
     --ring:0 0 0 3px rgba(42,95,224,.32);
     --scrim:rgba(15,23,41,.38);
+    /* The whole page background as one token, so no colour literal has to
+       live outside a theme block — a wash and a tint, then the flat canvas. */
+    --page-bg:
+      radial-gradient(1200px 560px at 50% -12%, #ffffff 0%, rgba(255,255,255,0) 60%),
+      linear-gradient(180deg, #f3f7fd 0%, #eef2f9 44%);
     --bg:var(--canv); --panel:var(--surface); --panel2:var(--surface-2);
     --line:var(--border); --muted:var(--text-muted); --on-good:#ffffff;
     --pill-auto-bg:var(--good-soft); --pill-review-bg:var(--warn-soft);
     --pill-rejected-bg:var(--bad-soft); --pill-pending-bg:var(--neutral-soft);
   }
   *{box-sizing:border-box; margin:0; padding:0}
-  body{background:var(--bg); color:var(--text);
+  body{background:var(--page-bg); background-attachment:fixed;
+       color:var(--text);
        font:15px/1.5 "Segoe UI", system-ui, sans-serif; padding:24px}
 
   /* ---- Bright-mode affordances ------------------------------------------
      The dark theme separates surfaces with lines, because a dark canvas has
      no light to spend. Bright mode has light to spend, so it separates with
-     elevation instead: a softly tinted canvas under crisp white surfaces,
-     and a shadow ramp carrying the hierarchy that borders used to. */
-  :root[data-theme="light"] body, :root[data-theme="bright"] body{
-    background:
-      radial-gradient(1200px 560px at 50% -12%,
-                      #ffffff 0%, rgba(255,255,255,0) 60%),
-      linear-gradient(180deg, #f3f7fd 0%, var(--canv) 44%);
-    background-attachment:fixed;
-  }
-  :root[data-theme="light"] .card, :root[data-theme="bright"] .card{
-    box-shadow:var(--shadow-1);
-  }
+     elevation instead: white surfaces over a tinted canvas, with a shadow
+     carrying the hierarchy that borders used to. */
+  :root[data-theme="bright"] .card{box-shadow:var(--shadow-1)}
 
   ::selection{background:var(--accent); color:var(--on-accent)}
 
@@ -134,6 +154,22 @@
   ::-webkit-scrollbar-thumb{background:var(--border-2); border-radius:var(--r-pill);
                             border:3px solid transparent; background-clip:content-box}
   ::-webkit-scrollbar-thumb:hover{background:var(--text-subtle); background-clip:content-box}
+
+  /* ---- Theme switcher ----------------------------------------------------
+     A segmented control, not a dropdown: the state is one click away instead
+     of two, and which theme is active is visible without opening anything. */
+  .seg{display:inline-flex; gap:2px; padding:3px; background:var(--surface-2);
+       border:1px solid var(--border); border-radius:var(--r-pill)}
+  .seg button{display:inline-flex; align-items:center; gap:6px; padding:6px 12px;
+              border:0; border-radius:var(--r-pill); background:transparent;
+              color:var(--text-muted); cursor:pointer;
+              font:600 var(--fs-xs)/1 var(--font);
+              transition:background var(--dur-fast) var(--ease),
+                         color var(--dur-fast) var(--ease)};
+  .seg button:hover{color:var(--text); background:var(--surface-3)}
+  .seg button[aria-pressed="true"]{background:var(--surface); color:var(--text);
+                                    box-shadow:var(--shadow-1)}
+  .seg button svg{width:14px; height:14px; flex:none}
   h1{font-size:22px; font-weight:600}
   h2{font-size:15px; font-weight:600; color:var(--muted);
      text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px}
@@ -150,7 +186,9 @@
      border-bottom:1px solid var(--line); text-transform:uppercase; font-size:11px; letter-spacing:.06em}
   td{padding:7px 8px; border-bottom:1px solid var(--panel2)}
   tr:last-child td{border-bottom:none}
-  button{background:var(--accent); border:none; color:#fff; padding:9px 14px;
+  /* --on-accent, not #fff: white on the dark theme's light-blue accent was
+     ~2.3:1, which is unreadable. The token flips to near-black there. */
+  button{background:var(--accent); border:none; color:var(--on-accent); padding:9px 14px;
          border-radius:8px; font-weight:600; cursor:pointer; font-size:13.5px}
   button.ghost{background:transparent; border:1px solid var(--line); color:var(--muted)}
   button.approve{background:var(--good); color:var(--on-good)}
@@ -203,12 +241,26 @@
       <div class="muted">Should we automate this? · How do we run it safely? · Is it actually working?</div>
     </div>
     <div style="display:flex; gap:8px; align-items:center">
-      <select id="theme_select" aria-label="Theme" style="width:auto; padding:7px 8px"
-              onchange="setTheme(this.value)">
-        <option value="auto">Theme: auto</option>
-        <option value="light">Theme: light</option>
-        <option value="dark">Theme: dark</option>
-      </select>
+      <div class="seg" role="group" aria-label="Colour theme">
+        <button type="button" data-theme-mode="bright" aria-pressed="false"
+                title="Bright — daylight palette for shared screens"
+                onclick="setTheme('bright')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <span>Bright</span></button>
+        <button type="button" data-theme-mode="dark" aria-pressed="false"
+                title="Dark — low-light palette"
+                onclick="setTheme('dark')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+          <span>Dark</span></button>
+        <button type="button" data-theme-mode="auto" aria-pressed="false"
+                title="Auto — follow the operating system"
+                onclick="setTheme('auto')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          <span>Auto</span></button>
+      </div>
       <button class="ghost" onclick="loadAll()">Refresh</button>
     </div>
   </div>
@@ -399,18 +451,18 @@ async function api(path, opts) {
 // AIOPS_API_KEY:  localStorage.setItem("aiops_api_key", "<key>")
 window.setApiKey = (k) => { localStorage.setItem("aiops_api_key", k); location.reload(); };
 
-// Theme: "auto" follows the OS, bright/dark pin it. Persisted under aiops_theme.
+// Theme: "auto" follows the OS, bright/dark pin it. Persisted under aiops_theme
+// and applied pre-paint by the boot script in <head>.
 //
 // "auto" is resolved to a concrete theme and written to the attribute, so the
-// stylesheet never has to answer "am I light right now?" in a media query. That
-// keeps the bright theme to one code path — OS-driven and explicitly-pinned
-// bright users get byte-identical CSS, which is the only way a second theme
-// stays correct as the first one is edited.
+// stylesheet never has to answer "am I light right now?" in a media query.
+// That keeps the bright theme to one code path — OS-driven and explicitly
+// pinned bright users get identical CSS.
+const THEME_MODES = ["bright", "dark", "auto"];
 const prefersBright = () =>
   window.matchMedia("(prefers-color-scheme: light)").matches;
 
 function resolveTheme(mode) {
-  if (mode === "light") mode = "bright";  // value stored by older builds
   if (mode === "bright" || mode === "dark") return mode;
   return prefersBright() ? "bright" : "dark";
 }
@@ -421,9 +473,18 @@ function applyTheme(mode) {
   return resolved;
 }
 
+// Reflect the stored preference (not the resolved theme) on the switcher, so
+// "auto" stays visibly selected even though it renders as bright or dark.
+function renderThemeState(mode) {
+  document.querySelectorAll("[data-theme-mode]").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.themeMode === mode)));
+}
+
 function setTheme(mode) {
+  if (!THEME_MODES.includes(mode)) return;
   localStorage.setItem("aiops_theme", mode);
   applyTheme(mode);
+  renderThemeState(mode);
 }
 
 // Follow the OS while — and only while — the preference is still "auto".
@@ -432,7 +493,9 @@ window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", ()
 });
 
 (function () {
-  applyTheme(localStorage.getItem("aiops_theme") || "auto");
+  const mode = localStorage.getItem("aiops_theme") || "auto";
+  applyTheme(mode);
+  renderThemeState(THEME_MODES.includes(mode) ? mode : "auto");
 })();
 
 async function loadAll() {
