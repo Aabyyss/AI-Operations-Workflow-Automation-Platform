@@ -218,7 +218,39 @@
      text-transform:uppercase; letter-spacing:var(--track-caps);
      margin-bottom:var(--sp-3)}
   .row{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px}
-  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin:14px 0}
+  /* ---- Stat cards ------------------------------------------------------
+     A fixed internal shape — eyebrow, value with its unit welded to it, note
+     — so nine cards of wildly different number lengths still line up on a
+     common baseline. The previous version concatenated value and unit into
+     one string, which let the unit wrap onto its own line ("71.4%" over a
+     stranded "no human touched") and produced "100%of 1 ratings". */
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(182px,1fr));
+         gap:var(--sp-3); margin:var(--sp-5) 0}
+  .stat{position:relative; overflow:hidden; display:flex; flex-direction:column;
+        gap:var(--sp-1); min-width:0;
+        background:var(--surface); border:1px solid var(--border);
+        border-radius:var(--r-lg); padding:var(--sp-4);
+        box-shadow:var(--shadow-1)}
+  .stat-label{font-size:var(--fs-2xs); font-weight:700; text-transform:uppercase;
+              letter-spacing:var(--track-caps); color:var(--text-subtle)}
+  .stat-value{display:flex; align-items:baseline; gap:3px; white-space:nowrap;
+              font-size:var(--fs-3xl); font-weight:700; letter-spacing:-.025em;
+              line-height:1.06; font-variant-numeric:tabular-nums}
+  .stat-unit{font-size:var(--fs-lg); font-weight:600; color:var(--text-muted);
+             letter-spacing:0}
+  .stat-note{margin-top:auto; padding-top:var(--sp-2);
+             font-size:var(--fs-xs); color:var(--text-muted);
+             white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  /* Tone is opt-in and always documented on hover, so a colour never silently
+     asserts a target the reader cannot see. */
+  .stat.good .stat-value{color:var(--good)}
+  .stat.warn .stat-value{color:var(--warn)}
+  .stat.bad  .stat-value{color:var(--bad)}
+  .stat.good::after, .stat.warn::after, .stat.bad::after{
+    content:""; position:absolute; inset:0 auto 0 0; width:3px;
+    background:var(--good)}
+  .stat.warn::after{background:var(--warn)}
+  .stat.bad::after{background:var(--bad)}
   .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px}
   .kpi{font-size:var(--fs-2xl); font-weight:700; margin-top:2px;
        letter-spacing:-.02em; line-height:var(--lh-tight);
@@ -500,13 +532,38 @@ const money = (v) => "$" + Number(v).toLocaleString(undefined,{maximumFractionDi
 // Token costs are sub-cent: a 2-decimal formatter renders every agent as "$0",
 // which reads as "free" instead of "$0.0008". Keep cents for dollars, go to
 // 5 decimals below a cent.
+const trimZeros = (s) => s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
 const usd = (v) => {
   const n = Number(v) || 0;
   if (n === 0) return "$0";
   if (Math.abs(n) >= 0.01) return "$" + n.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
-  return "$" + n.toFixed(5);
+  return "$" + trimZeros(n.toFixed(5));
 };
+// One decimal at most: "54.981ms" claims precision the measurement does not
+// have, and "55.0" claims a precision nobody wants to read.
+const ms = (v) => v === null || v === undefined ? "—" : trimZeros(Number(v).toFixed(1));
+const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + "s")}`;
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+// Round dollars for display: "$6,494.5" reads as a precision claim nobody
+// made. Below a thousand, cents are real and stay.
+const moneyShort = (v) => {
+  const n = Number(v) || 0;
+  return Math.abs(n) >= 1000
+    ? "$" + Math.round(n).toLocaleString()
+    : "$" + n.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
+};
+// "2778.6m" is a number, not an answer. Operators read durations in units.
+const humanizeMinutes = (m) => {
+  const n = Number(m) || 0;
+  if (n < 1) return "<1m";
+  if (n < 60) return Math.round(n) + "m";
+  if (n < 60 * 48) {
+    const h = Math.floor(n / 60), mins = Math.round(n % 60);
+    return mins ? `${h}h ${mins}m` : `${h}h`;
+  }
+  const d = Math.floor(n / 1440), h = Math.round((n % 1440) / 60);
+  return h ? `${d}d ${h}h` : `${d}d`;
+};
 
 async function api(path, opts) {
   const headers = {"Content-Type": "application/json"};
@@ -662,22 +719,58 @@ function renderAB(a) {
     <div style="margin-top:8px" class="good">AI path ~${a.ai_faster_pct}% faster on median cycle time (${sec(a.median_delta_seconds)} saved per ticket)</div>`;
 }
 
+// Threshold bands for tone. Deliberately conservative: a stat only gets a
+// colour when the number is far enough from healthy that an operator would act
+// on it, and the band is always stated in the tooltip rather than implied.
+function band(value, good, warn, higherIsBetter = true) {
+  const n = Number(value);
+  if (!isFinite(n)) return {};
+  const pass = higherIsBetter ? n >= good : n <= good;
+  const risky = higherIsBetter ? n < warn : n > warn;
+  if (pass) return {tone: "good", band: (higherIsBetter ? "≥" : "≤") + good};
+  if (risky) return {tone: "warn", band: (higherIsBetter ? "<" : ">") + warn};
+  return {};
+}
+
 function renderKpis(s, sla, perf) {
   const fb = perf.feedback || {};
-  const k = [
-    ["Tickets processed", s.tickets_processed, ""],
-    ["Containment rate", perf.containment_rate_pct, "% no human touched"],
-    ["Automation rate", s.automation_rate_pct, "%"],
-    ["Pending approvals", sla.pending, `· oldest ${sla.oldest_pending_minutes}m`],
-    ["Escalation rate", sla.escalation_rate_pct, "%"],
-    ["p95 latency", perf.latency_ms.p95, "ms"],
-    ["Satisfaction", fb.feedback_count ? fb.satisfaction_pct + "%" : "—",
-     fb.feedback_count ? `of ${fb.feedback_count} ratings · ${fb.with_correction} corrections` : "no feedback yet"],
-    ["LLM spend", "$" + (s.total_llm_cost_usd||0).toFixed(4), ""],
-    ["Est. monthly savings", money(s.estimated_monthly_savings_usd||0), ""],
+  const p95 = perf.latency_ms ? perf.latency_ms.p95 : null;
+  const disappointed = fb.feedback_count
+    ? band(fb.satisfaction_pct, 80, 60) : {};
+  const stats = [
+    {label: "Tickets processed", value: s.tickets_processed,
+     note: "in this deployment's ledger"},
+    {label: "Containment rate", unit: "%", value: perf.containment_rate_pct,
+     note: "no human touched", ...band(perf.containment_rate_pct, 70, 40)},
+    {label: "Automation rate", unit: "%", value: s.automation_rate_pct,
+     note: "volume handled without a person", ...band(s.automation_rate_pct, 70, 40)},
+    {label: "Pending approvals", value: sla.pending,
+     note: `oldest waiting ${humanizeMinutes(sla.oldest_pending_minutes)}`,
+     ...(sla.pending ? {tone: "warn", band: "queue empty"} : {tone: "good", band: "queue empty"})},
+    {label: "Escalation rate", unit: "%", value: sla.escalation_rate_pct,
+     note: "touched a human", ...band(sla.escalation_rate_pct, 30, 60, false)},
+    {label: "p95 latency", unit: "ms", value: p95 === null ? null : ms(p95),
+     note: "end-to-end per ticket"},
+    {label: "Satisfaction", unit: fb.feedback_count ? "%" : "",
+     value: fb.feedback_count ? fb.satisfaction_pct : "—",
+     note: fb.feedback_count
+       ? `${plural(fb.feedback_count, "rating")} · ${plural(fb.with_correction, "correction")}`
+       : "no feedback yet", ...disappointed},
+    {label: "LLM spend", value: usd(s.total_llm_cost_usd || 0),
+     note: "token cost of every run"},
+    {label: "Est. monthly savings", value: moneyShort(s.estimated_monthly_savings_usd || 0),
+     note: "modelled, not invoiced"},
   ];
-  $("kpis").innerHTML = k.map(([l,v,u]) =>
-    `<div class="card"><div class="muted">${l}</div><div class="kpi">${esc(v)}<small>${u}</small></div></div>`).join("");
+  $("kpis").innerHTML = stats.map(st => {
+    const tone = st.tone || "";
+    const why = st.band ? `Tone band: ${st.band}` : "";
+    const title = [st.note, why].filter(Boolean).join(" · ");
+    return `<div class="stat ${tone}" title="${esc(title)}">
+      <div class="stat-label">${esc(st.label)}</div>
+      <div class="stat-value">${esc(st.value === null || st.value === undefined ? "—" : st.value)}${st.unit ? `<span class="stat-unit">${esc(st.unit)}</span>` : ""}</div>
+      <div class="stat-note">${esc(st.note)}</div>
+    </div>`;
+  }).join("");
 }
 
 function renderBudget(b) {
