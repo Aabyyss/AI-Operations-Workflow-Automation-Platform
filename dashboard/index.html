@@ -135,7 +135,8 @@
   *{box-sizing:border-box; margin:0; padding:0}
   body{background:var(--page-bg); background-attachment:fixed;
        color:var(--text);
-       font:15px/1.5 "Segoe UI", system-ui, sans-serif; padding:24px}
+       font:var(--fs-md)/var(--lh-base) var(--font); padding:24px;
+       -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility}
 
   /* ---- Bright-mode affordances ------------------------------------------
      The dark theme separates surfaces with lines, because a dark canvas has
@@ -170,57 +171,79 @@
   .seg button[aria-pressed="true"]{background:var(--surface); color:var(--text);
                                     box-shadow:var(--shadow-1)}
   .seg button svg{width:14px; height:14px; flex:none}
-  h1{font-size:22px; font-weight:600}
-  h2{font-size:15px; font-weight:600; color:var(--muted);
-     text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px}
+  /* Type: one scale, negative tracking on the display sizes, and uppercase
+     eyebrows for section labels so the eye can find structure without
+     competing with the data. Numerals are tabular wherever they are
+     compared column-to-column — proportional digits make a KPI row of
+     numbers impossible to scan. */
+  h1{font-size:var(--fs-2xl); font-weight:600; letter-spacing:-.022em;
+     line-height:var(--lh-tight)}
+  h2{font-size:var(--fs-2xs); font-weight:700; color:var(--text-subtle);
+     text-transform:uppercase; letter-spacing:var(--track-caps);
+     margin-bottom:var(--sp-3)}
   .wrap{max-width:1180px; margin:0 auto}
   .row{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px}
   .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin:14px 0}
   .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px}
-  .kpi{font-size:26px; font-weight:700; margin-top:2px}
-  .kpi small{font-size:13px; color:var(--muted); font-weight:400}
-  .muted{color:var(--muted); font-size:13px}
+  .kpi{font-size:var(--fs-2xl); font-weight:700; margin-top:2px;
+       letter-spacing:-.02em; line-height:var(--lh-tight);
+       font-variant-numeric:tabular-nums}
+  .kpi small{font-size:var(--fs-sm); color:var(--text-muted); font-weight:400;
+             letter-spacing:0}
+  .muted{color:var(--text-muted); font-size:var(--fs-sm); line-height:var(--lh-snug)}
+  /* Every number the reader might compare with the number above it. */
+  th,td,.num{font-variant-numeric:tabular-nums}
   .good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
-  table{width:100%; border-collapse:collapse; font-size:13.5px}
+  table{width:100%; border-collapse:collapse; font-size:var(--fs-sm)}
   th{color:var(--muted); text-align:left; font-weight:600; padding:6px 8px;
-     border-bottom:1px solid var(--line); text-transform:uppercase; font-size:11px; letter-spacing:.06em}
+     border-bottom:1px solid var(--border); text-transform:uppercase;
+     font-size:var(--fs-2xs); letter-spacing:var(--track-caps)}
   td{padding:7px 8px; border-bottom:1px solid var(--panel2)}
   tr:last-child td{border-bottom:none}
   /* --on-accent, not #fff: white on the dark theme's light-blue accent was
      ~2.3:1, which is unreadable. The token flips to near-black there. */
   button{background:var(--accent); border:none; color:var(--on-accent); padding:9px 14px;
-         border-radius:8px; font-weight:600; cursor:pointer; font-size:13.5px}
+         border-radius:var(--r-sm); font-weight:600; cursor:pointer;
+         font-size:var(--fs-sm)}
   button.ghost{background:transparent; border:1px solid var(--line); color:var(--muted)}
   button.approve{background:var(--good); color:var(--on-good)}
   button.reject{background:transparent; border:1px solid var(--bad); color:var(--bad)}
   button:hover{filter:brightness(1.1)}
-  .pill{display:inline-block; padding:2px 9px; border-radius:99px; font-size:11.5px; font-weight:600}
+  .pill{display:inline-block; padding:2px 9px; border-radius:var(--r-pill);
+        font-size:var(--fs-2xs); font-weight:600; line-height:1.6}
   .pill.auto,.pill.approved{background:var(--pill-auto-bg); color:var(--good)}
   .pill.review{background:var(--pill-review-bg); color:var(--warn)}
   .pill.rejected{background:var(--pill-rejected-bg); color:var(--bad)}
   .pill.pending{background:var(--pill-pending-bg); color:var(--muted)}
   textarea{width:100%; min-height:74px; background:var(--panel2); color:var(--text);
-           border:1px solid var(--line); border-radius:8px; padding:10px; font:13px/1.45 inherit}
+           border:1px solid var(--border); border-radius:var(--r-sm); padding:10px;
+           font:var(--fs-sm)/1.45 var(--font)}
   input{width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--line);
-        border-radius:8px; padding:9px 10px; font:13.5px inherit}
-  label{display:block; font-size:12px; color:var(--muted); margin:8px 0 3px}
+        border-radius:var(--r-sm); padding:9px 10px; font:var(--fs-sm) var(--font)}
+  label{display:block; font-size:var(--fs-xs); font-weight:600;
+        color:var(--text-muted); margin:8px 0 3px; letter-spacing:.01em}
   .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
-  pre{background:var(--panel2); border:1px solid var(--line); border-radius:8px;
-      padding:10px; font-size:12px; overflow:auto; max-height:220px; white-space:pre-wrap}
+  /* A <pre> is a code block: it must not inherit the UI font the way it did. */
+  pre{background:var(--surface-2); border:1px solid var(--border);
+      border-radius:var(--r-sm); padding:var(--sp-3); overflow:auto;
+      max-height:220px; white-space:pre-wrap;
+      font:var(--fs-xs)/1.55 var(--font-mono)}
   .hidden{display:none}
   .bar{height:8px; background:var(--panel2); border-radius:99px; overflow:hidden; margin-top:6px}
   .bar>i{display:block; height:100%; background:var(--accent)}
   .bar>i.g{background:var(--good)} .bar>i.w{background:var(--warn)}
-  code{background:var(--panel2); border:1px solid var(--line); border-radius:6px;
-       padding:1px 6px; font:12px/1.5 ui-monospace,Consolas,monospace}
+  code{background:var(--surface-2); border:1px solid var(--border);
+       border-radius:var(--r-xs); padding:1px 6px;
+       font:var(--fs-xs)/1.5 var(--font-mono); color:var(--text)}
   td, .card, .pill{overflow-wrap:anywhere}
   /* Audit event lines: structured, wrap-safe, never clipped mid-token */
   .ev{display:flex; gap:8px; align-items:baseline; padding:5px 8px; margin:2px 0;
       border-radius:8px; overflow-wrap:anywhere}
   .ev:hover{background:var(--panel2)}
-  .ev time{color:var(--muted); font:12px/1.6 ui-monospace,Consolas,monospace; flex:none}
-  .ev .ev-name{font-weight:600; font-size:12.5px; flex:none}
-  .ev .ev-payload{color:var(--muted); font-size:12.5px; min-width:0}
+  .ev time{color:var(--text-subtle); font:var(--fs-xs)/1.6 var(--font-mono);
+           flex:none; font-variant-numeric:tabular-nums}
+  .ev .ev-name{font-weight:600; font-size:var(--fs-xs); flex:none}
+  .ev .ev-payload{color:var(--text-muted); font-size:var(--fs-xs); min-width:0}
   .ev .ev-payload b{color:var(--text); font-weight:600}
   .ev-good{color:var(--good)} .ev-warn{color:var(--warn)}
   .ev-bad{color:var(--bad)} .ev-info{color:var(--accent)}
