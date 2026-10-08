@@ -5,36 +5,105 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Operations &amp; Workflow Automation Platform</title>
 <style>
+  /* ==========================================================================
+     Design tokens.
+
+     Two layers, on purpose:
+       1. scales — geometry, type, motion. Theme-independent, defined once.
+       2. semantic colour — named for the job it does (surface / border / text
+          role), defined once per theme, never written as a hex outside the
+          two theme blocks below.
+
+     Nothing below this block may contain a literal colour. That rule is what
+     makes "bright mode" a palette swap rather than a second stylesheet, and
+     tests/test_dashboard_theme.py enforces it.
+     ====================================================================== */
   :root{
+    /* space — 4px base */
+    --sp-1:4px;  --sp-2:8px;  --sp-3:12px; --sp-4:16px; --sp-5:20px;
+    --sp-6:24px; --sp-7:32px; --sp-8:40px; --sp-9:56px;
+    /* radius */
+    --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:14px; --r-xl:20px;
+    --r-pill:999px;
+    /* type */
+    --font:"Inter", "Segoe UI Variable Text", "Segoe UI", system-ui,
+           -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --font-mono:ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+    --fs-2xs:11px; --fs-xs:12px; --fs-sm:13px; --fs-md:14px; --fs-lg:16px;
+    --fs-xl:19px; --fs-2xl:25px; --fs-3xl:33px;
+    --lh-tight:1.15; --lh-snug:1.35; --lh-base:1.55;
+    --track-caps:.085em;
+    /* motion */
+    --ease:cubic-bezier(.2,.7,.3,1);
+    --dur-fast:120ms; --dur:180ms;
+    /* layout */
+    --page-max:1260px;
+  }
+
+  /* ---- Dark (default) ---- */
+  :root, :root[data-theme="dark"]{
     color-scheme: dark;
-    --bg:#0b1020; --panel:#131a30; --panel2:#1a2342; --line:#26325a;
-    --text:#e8ecf8; --muted:#93a0c4; --accent:#5b8cff; --good:#3ddc97;
-    --warn:#ffb454; --bad:#ff6b7a; --on-good:#06281a;
-    --pill-auto-bg:#0e3b2a; --pill-review-bg:#3b2f0e;
-    --pill-rejected-bg:#3b1219; --pill-pending-bg:#22284a;
+    --canv:#0a0e1c;
+    --surface:#121a30;
+    --surface-2:#1a2440;
+    --surface-3:#212d4f;
+    --border:#26325a;
+    --border-2:#364467;
+    --text:#e9edf9;
+    --text-muted:#95a2c6;
+    --text-subtle:#6f7da6;
+    --accent:#6d9bff;      --accent-hover:#8cb1ff;
+    --accent-soft:#16244a; --on-accent:#05102b;
+    --good:#45dea0; --good-soft:#0d3a2a;
+    --warn:#ffbe63; --warn-soft:#3d2f0e;
+    --bad:#ff7c88;  --bad-soft:#3d141b;
+    --neutral-soft:#222c4e;
+    --avatar-bg:#233063;
+    --shadow-1:0 1px 2px rgba(0,0,0,.35);
+    --shadow-2:0 2px 6px rgba(0,0,0,.35), 0 12px 24px -14px rgba(0,0,0,.6);
+    --shadow-3:0 18px 44px -18px rgba(0,0,0,.75);
+    --ring:0 0 0 3px rgba(109,155,255,.4);
+    --scrim:rgba(4,7,16,.72);
+    /* legacy aliases — kept until every inline style is migrated to a class */
+    --bg:var(--canv); --panel:var(--surface); --panel2:var(--surface-2);
+    --line:var(--border); --muted:var(--text-muted); --on-good:#06281a;
+    --pill-auto-bg:var(--good-soft); --pill-review-bg:var(--warn-soft);
+    --pill-rejected-bg:var(--bad-soft); --pill-pending-bg:var(--neutral-soft);
   }
-  /* Light palette: applied via the OS (no data-theme attr) or explicitly
-     via data-theme="light" set by the header toggle. data-theme="dark"
-     forces dark regardless of OS. */
-  @media (prefers-color-scheme: light){
-    :root:not([data-theme="dark"]){
-      color-scheme: light;
-      --bg:#f4f6fb; --panel:#ffffff; --panel2:#eef1f8; --line:#d8deed;
-      --text:#1c2333; --muted:#5b6579; --accent:#3d6ef0; --good:#0f9d6a;
-      --warn:#9a5b00; --bad:#d64550; --on-good:#ffffff;
-      --pill-auto-bg:#d8f5e6; --pill-review-bg:#fdeed3;
-      --pill-rejected-bg:#fde2e5; --pill-pending-bg:#e6eaf5;
-    }
-  }
-  :root[data-theme="light"]{
+
+  /* ---- Bright ----
+     A daylight theme for meeting rooms, projectors and printed screenshots:
+     a tinted canvas so white cards read as raised, a single saturated accent
+     for meaning, and a shadow ramp strong enough to carry hierarchy without
+     borders doing all the work. */
+  :root[data-theme="light"], :root[data-theme="bright"]{
     color-scheme: light;
-    --bg:#f4f6fb; --panel:#ffffff; --panel2:#eef1f8; --line:#d8deed;
-    --text:#1c2333; --muted:#5b6579; --accent:#3d6ef0; --good:#0f9d6a;
-    --warn:#9a5b00; --bad:#d64550; --on-good:#ffffff;
-    --pill-auto-bg:#d8f5e6; --pill-review-bg:#fdeed3;
-    --pill-rejected-bg:#fde2e5; --pill-pending-bg:#e6eaf5;
+    --canv:#eef2f9;
+    --surface:#ffffff;
+    --surface-2:#f4f7fc;
+    --surface-3:#e9eff9;
+    --border:#dfe6f2;
+    --border-2:#c3cede;
+    --text:#0f1729;
+    --text-muted:#586683;
+    --text-subtle:#7d88a3;
+    --accent:#2a5fe0;      --accent-hover:#1d4cc4;
+    --accent-soft:#e6edff; --on-accent:#ffffff;
+    --good:#0a7a52; --good-soft:#dcf5ea;
+    --warn:#8a5300; --warn-soft:#fdeed2;
+    --bad:#c8283c;  --bad-soft:#fde6e9;
+    --neutral-soft:#e8edf6;
+    --avatar-bg:#dbe4f7;
+    --shadow-1:0 1px 2px rgba(16,32,72,.06), 0 1px 1px rgba(16,32,72,.04);
+    --shadow-2:0 1px 2px rgba(16,32,72,.06), 0 8px 20px -12px rgba(16,32,72,.22);
+    --shadow-3:0 24px 48px -20px rgba(16,32,72,.3);
+    --ring:0 0 0 3px rgba(42,95,224,.32);
+    --scrim:rgba(15,23,41,.38);
+    --bg:var(--canv); --panel:var(--surface); --panel2:var(--surface-2);
+    --line:var(--border); --muted:var(--text-muted); --on-good:#ffffff;
+    --pill-auto-bg:var(--good-soft); --pill-review-bg:var(--warn-soft);
+    --pill-rejected-bg:var(--bad-soft); --pill-pending-bg:var(--neutral-soft);
   }
-  :root[data-theme="dark"]{ color-scheme: dark; }
   *{box-sizing:border-box; margin:0; padding:0}
   body{background:var(--bg); color:var(--text);
        font:15px/1.5 "Segoe UI", system-ui, sans-serif; padding:24px}
