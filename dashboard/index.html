@@ -263,12 +263,29 @@
   /* Every number the reader might compare with the number above it. */
   th,td,.num{font-variant-numeric:tabular-nums}
   .good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+  /* ---- Tables -----------------------------------------------------------
+     Numbers are right-aligned and tabular, so a column of costs can be
+     compared by eye — that is the entire job of these tables. */
   table{width:100%; border-collapse:collapse; font-size:var(--fs-sm)}
-  th{color:var(--muted); text-align:left; font-weight:600; padding:6px 8px;
+  th{color:var(--text-subtle); text-align:left; font-weight:700;
+     padding:0 var(--sp-3) var(--sp-2); white-space:nowrap;
      border-bottom:1px solid var(--border); text-transform:uppercase;
      font-size:var(--fs-2xs); letter-spacing:var(--track-caps)}
-  td{padding:7px 8px; border-bottom:1px solid var(--panel2)}
+  th.num,td.num{text-align:right}
+  td{padding:var(--sp-2) var(--sp-3); border-bottom:1px solid var(--border);
+     overflow-wrap:break-word}
+  td:first-child,th:first-child{padding-left:0}
+  td:last-child,th:last-child{padding-right:0}
+  tbody tr{transition:background var(--dur-fast) var(--ease)}
+  tbody tr:hover{background:var(--surface-2)}
   tr:last-child td{border-bottom:none}
+  /* Long tables scroll sideways rather than squashing their columns. */
+  .table-scroll{overflow-x:auto}
+  .table-scroll table{min-width:520px}
+  /* An empty table is a statement, not a blank: say so in the table's own
+     voice instead of leaving a lone grey row. */
+  .empty{text-align:center; color:var(--text-muted); padding:var(--sp-5);
+         font-size:var(--fs-sm)}
   /* --on-accent, not #fff: white on the dark theme's light-blue accent was
      ~2.3:1, which is unreadable. The token flips to near-black there. */
   /* ---- Buttons ----------------------------------------------------------
@@ -374,7 +391,7 @@
   code{background:var(--surface-2); border:1px solid var(--border);
        border-radius:var(--r-xs); padding:1px 6px;
        font:var(--fs-xs)/1.5 var(--font-mono); color:var(--text)}
-  td, .card, .pill{overflow-wrap:anywhere}
+  .card, .pill{overflow-wrap:anywhere}
   /* Audit event lines: structured, wrap-safe, never clipped mid-token */
   .ev{display:flex; gap:8px; align-items:baseline; padding:5px 8px; margin:2px 0;
       border-radius:8px; overflow-wrap:anywhere}
@@ -879,8 +896,8 @@ function renderDrift(d) {
     `<span class="muted">Need ${d.required} runs for a baseline comparison (${d.runs_total} so far).</span>`; return; }
   const badge = d.status === "alert" ? '<span class="pill review">drift alert</span>' : '<span class="pill auto">nominal</span>';
   const rows = Object.entries(d.signals).map(([k, s]) =>
-    `<tr><td>${k}</td><td>${s.baseline_pct}%</td><td>${s.recent_pct}%</td><td class="${s.alert ? "bad" : ""}">${s.delta_pct > 0 ? "+" : ""}${s.delta_pct}pp</td></tr>`).join("");
-  $("drift_out").innerHTML = `${badge}<table style="margin-top:8px"><thead><tr><th></th><th>baseline</th><th>recent</th><th>Δ</th></tr></thead><tbody>${rows}</tbody></table>
+    `<tr><td>${esc(k)}</td><td class="num">${s.baseline_pct}%</td><td class="num">${s.recent_pct}%</td><td class="num ${s.alert ? "bad" : ""}">${s.delta_pct > 0 ? "+" : ""}${s.delta_pct}pp</td></tr>`).join("");
+  $("drift_out").innerHTML = `${badge}<table style="margin-top:8px"><thead><tr><th></th><th class="num">baseline</th><th class="num">recent</th><th class="num">Δ</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="muted" style="margin-top:6px">Last ${d.window} runs vs previous ${d.window} · alert at ±${d.threshold_pct}pp</div>`;
 }
 
@@ -892,8 +909,8 @@ function renderCosts(usage) {
   });
   const rows = Object.entries(by).sort((a,b)=>b[1].cost-a[1].cost);
   $("cost_tbl").querySelector("tbody").innerHTML = rows.length ? rows.map(([a,c]) =>
-    `<tr><td>${esc(a)}</td><td>${c.calls}</td><td>${c.tin.toLocaleString()} / ${c.tout.toLocaleString()}</td><td title="$${c.cost.toFixed(8)}">${usd(c.cost)}</td></tr>`).join("")
-    : `<tr><td colspan="4" class="muted">No usage recorded yet</td></tr>`;
+    `<tr><td>${esc(a)}</td><td class="num">${c.calls.toLocaleString()}</td><td class="num">${c.tin.toLocaleString()} / ${c.tout.toLocaleString()}</td><td class="num" title="$${c.cost.toFixed(8)}">${usd(c.cost)}</td></tr>`).join("")
+    : `<tr><td colspan="4" class="empty">No token usage recorded yet — run a ticket and it will appear here.</td></tr>`;
 }
 
 // ---- Market cost comparison: model published list prices at your volume
@@ -946,9 +963,9 @@ function renderCostCompare(r) {
     return `<tr>
       <td><a href="${esc(p.source)}" target="_blank" rel="noopener"
              style="color:inherit" title="${esc(p.note)}">${esc(p.vendor)}</a></td>
-      <td>${quoted ? "—" : money(p.monthly_usd)}</td>
-      <td>${quoted ? "—" : money(p.annual_usd)}</td>
-      <td>${quoted ? "—" : usd(p.cost_per_ticket_usd)}</td>
+      <td class="num">${quoted ? "—" : moneyShort(p.monthly_usd)}</td>
+      <td class="num">${quoted ? "—" : moneyShort(p.annual_usd)}</td>
+      <td class="num">${quoted ? "—" : usd(p.cost_per_ticket_usd)}</td>
       <td>${breakeven}</td>
       <td>${verdict}</td>
     </tr>`;
@@ -967,12 +984,14 @@ function renderCostCompare(r) {
       r.escalations_per_month ? ` · ${r.escalations_per_month}/month touch a human` : ""}
     </div>
     <table style="margin-top:12px">
-      <thead><tr><th>Plan (source)</th><th>$ / month</th><th>$ / year</th><th>$ / ticket</th>
-        <th>Costs more above</th><th>Verdict</th></tr></thead>
+      <thead><tr><th>Plan (source)</th><th class="num">$ / month</th><th class="num">$ / year</th>
+        <th class="num">$ / ticket</th>
+        <th class="num">Costs more above</th><th>Verdict</th></tr></thead>
       <tbody>${rows}
         <tr class="cc-ours">
-          <td>This pipeline</td><td>${money(r.our_monthly_usd)}</td>
-          <td>${money(r.our_annual_usd)}</td><td>${usd(r.our_cost_per_ticket_usd)}</td>
+          <td>This pipeline</td><td class="num">${moneyShort(r.our_monthly_usd)}</td>
+          <td class="num">${moneyShort(r.our_annual_usd)}</td>
+          <td class="num">${usd(r.our_cost_per_ticket_usd)}</td>
           <td><span class="muted">flat — pays per decision, not per resolution</span></td>
           <td><span class="pill auto">every ticket, resolved or not</span></td>
         </tr></tbody>
@@ -1050,8 +1069,8 @@ let lastRuns = [];
 
 async function renderKnowledge(docs) {
   if (!docs) { $("kb_list").innerHTML = '<span class="muted">Knowledge list unavailable.</span>'; return; }
-  $("kb_list").innerHTML = docs.length ? `<table><thead><tr><th>Document</th><th>Chunks</th><th>Updated</th><th></th></tr></thead><tbody>
-    ${docs.map(d => `<tr><td><b>${esc(d.doc_id)}</b> <span class="muted">${esc(d.title || "")}</span></td><td>${d.chunks}</td><td class="muted">${esc((d.modified_at || "").slice(0, 16).replace("T", " "))}</td>
+  $("kb_list").innerHTML = docs.length ? `<table><thead><tr><th>Document</th><th class="num">Chunks</th><th>Updated</th><th></th></tr></thead><tbody>
+    ${docs.map(d => `<tr><td><b>${esc(d.doc_id)}</b> <span class="muted">${esc(d.title || "")}</span></td><td class="num">${d.chunks}</td><td class="muted">${esc((d.modified_at || "").slice(0, 16).replace("T", " "))}</td>
       <td><button class="reject" onclick="deleteKnowledge('${esc(d.doc_id)}')">Delete</button></td></tr>`).join("")}
     </tbody></table>
     <div class="muted" style="margin-top:6px">The retriever serves changes immediately — the next ticket drafts against the new policy.</div>`
