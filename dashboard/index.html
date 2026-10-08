@@ -185,6 +185,52 @@
 
   ::selection{background:var(--accent); color:var(--on-accent)}
 
+  /* ---- Accessibility ----------------------------------------------------
+     One focus treatment for everything focusable. Links in particular had
+     nothing but the browser's hairline, which is invisible on a saturated
+     panel. */
+  .sr-only{position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+           overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px;
+                 border-radius:var(--r-xs)}
+  a{color:var(--accent)}
+  a:hover{color:var(--accent-hover)}
+  .skip-link{position:absolute; left:var(--sp-4); top:var(--sp-4); z-index:60;
+             transform:translateY(-300%); background:var(--accent);
+             color:var(--on-accent); padding:var(--sp-2) var(--sp-4);
+             border-radius:var(--r-sm); font-weight:600; text-decoration:none;
+             transition:transform var(--dur-fast) var(--ease)}
+  .skip-link:focus{transform:none}
+
+  /* This page animates meter fills and switches; the OS can say no. */
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:.01ms !important;
+      animation-iteration-count:1 !important;
+      transition-duration:.01ms !important}
+  }
+
+  /* ---- Narrow screens ---------------------------------------------------
+     Read on a laptop beside the thing being monitored, but also opened on a
+     phone during an incident: the layout folds instead of scrolling sideways. */
+  @media (max-width: 860px){
+    .wrap{padding:var(--sp-4) var(--sp-4) var(--sp-8)}
+    .topbar-inner{padding:var(--sp-2) var(--sp-4); gap:var(--sp-3)}
+    .brand-tag{display:none}
+    .seg button span{display:none}
+    .seg button{padding:7px 10px}
+    .section-head{flex-direction:column; gap:var(--sp-2)}
+    .fields,.fields-narrow{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .review-meta{margin-left:0; width:100%}
+    .run-subject{flex-basis:100%; order:2}
+  }
+  @media (max-width: 560px){
+    .cards{grid-template-columns:minmax(0,1fr)}
+    .fields,.fields-narrow,.metric-grid{grid-template-columns:minmax(0,1fr)}
+    .cc-inline .field{width:100% !important}
+    .run-actions{margin-left:0}
+  }
+
   /* Themed scrollbars: the default OS bar is the one piece of chrome that
      stays stubbornly dark inside a bright page. */
   *{scrollbar-width:thin; scrollbar-color:var(--border-2) transparent}
@@ -529,6 +575,7 @@
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to dashboard content</a>
 <header class="topbar">
   <div class="topbar-inner">
     <div class="brand">
@@ -571,7 +618,7 @@
   </div>
 </header>
 
-<main class="wrap">
+<main class="wrap" id="main">
   <div class="cards" id="kpis"></div>
   <div id="health_strip"></div>
 
@@ -632,7 +679,7 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
         <button onclick="submitTicket()">Run pipeline</button>
         <button class="ghost" onclick="demoTicket()">Run canonical demo ticket</button>
       </div>
-      <div class="mt-3" id="ticket_out"></div>
+      <div class="mt-3" id="ticket_out" role="status" aria-live="polite"></div>
     </div>
   </div>
 
@@ -651,7 +698,11 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
   <div class="row">
     <div class="card">
       <h2>Cost by Agent (USD)</h2>
-      <table id="cost_tbl"><thead><tr><th>Agent</th><th>Calls</th><th>Tokens in/out</th><th>Cost</th></tr></thead><tbody></tbody></table>
+      <div class="table-scroll">
+        <table id="cost_tbl" aria-label="Token cost by agent">
+          <thead><tr><th>Agent</th><th class="num">Calls</th><th class="num">Tokens in/out</th><th class="num">Cost</th></tr></thead>
+          <tbody></tbody></table>
+      </div>
     </div>
     <div class="card">
       <h2>Dispositions</h2>
@@ -693,7 +744,7 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
           names the plans that come out cheaper than us.
         </div>
       </div>
-      <span id="cc_msg" class="muted section-actions"></span>
+      <span id="cc_msg" class="muted section-actions" role="status" aria-live="polite"></span>
     </div>
     <div class="fields fields-narrow">
       <div class="field">
@@ -752,7 +803,7 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
       <div class="mt-2 btn-row">
         <button onclick="saveKnowledge(false)">Create document</button>
         <button class="ghost" onclick="saveKnowledge(true)">Overwrite existing</button>
-        <span id="kb_msg" class="muted"></span>
+        <span id="kb_msg" class="muted" role="status" aria-live="polite"></span>
       </div>
     </details>
   </div>
@@ -1089,8 +1140,13 @@ function renderDrift(d) {
   const badge = d.status === "alert" ? '<span class="pill bad">drift alert</span>' : '<span class="pill ok">nominal</span>';
   const rows = Object.entries(d.signals).map(([k, s]) =>
     `<tr><td>${esc(k)}</td><td class="num">${s.baseline_pct}%</td><td class="num">${s.recent_pct}%</td><td class="num ${s.alert ? "bad" : ""}">${s.delta_pct > 0 ? "+" : ""}${s.delta_pct}pp</td></tr>`).join("");
-  $("drift_out").innerHTML = `${badge}<table><thead><tr><th></th><th class="num mt-2">baseline</th><th class="num mt-2">recent</th><th class="num mt-2">Δ</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="muted mt-2">Last ${d.window} runs vs previous ${d.window} · alert at ±${d.threshold_pct}pp</div>`;
+  $("drift_out").innerHTML = `${badge}
+    <div class="table-scroll mt-2">
+      <table aria-label="Drift signals versus the previous window">
+        <thead><tr><th></th><th class="num">baseline</th><th class="num">recent</th><th class="num">Δ</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+    </div>
+    <div class="note mt-2">Last ${d.window} runs vs previous ${d.window} · alert at ±${d.threshold_pct}pp</div>`;
 }
 
 function renderCosts(usage) {
@@ -1179,7 +1235,8 @@ function renderCostCompare(r) {
       <span class="${r.mode === "live" ? "good" : "warn"}">${esc(r.mode)} mode</span>${
       r.escalations_per_month ? ` · ${r.escalations_per_month}/month touch a human` : ""}
     </div>
-    <table>
+    <div class="table-scroll">
+      <table aria-label="Modelled market plans against this pipeline">
       <thead><tr><th>Plan (source)</th><th class="num">$ / month</th><th class="num">$ / year</th>
         <th class="num">$ / ticket</th>
         <th class="num">Costs more above</th><th>Verdict</th></tr></thead>
@@ -1192,7 +1249,8 @@ function renderCostCompare(r) {
           <td><span class="pill info">every ticket, resolved or not</span></td>
         </tr></tbody>
     </table>
-    <details>
+    </div>
+    <details class="mt-3">
       <summary class="muted" style="cursor:pointer">Assumptions &amp;
         caveats (${r.assumptions.length + r.caveats.length})</summary>
       <div class="muted mt-2"><b>Assumptions</b>
@@ -1311,11 +1369,11 @@ let lastRuns = [];
 
 async function renderKnowledge(docs) {
   if (!docs) { $("kb_list").innerHTML = '<span class="muted">Knowledge list unavailable.</span>'; return; }
-  $("kb_list").innerHTML = docs.length ? `<table><thead><tr><th>Document</th><th class="num">Chunks</th><th>Updated</th><th></th></tr></thead><tbody>
+  $("kb_list").innerHTML = docs.length ? `<div class="table-scroll"><table aria-label="Knowledge base documents"><thead><tr><th>Document</th><th class="num">Chunks</th><th>Updated</th><th></th></tr></thead><tbody>
     ${docs.map(d => `<tr><td><b>${esc(d.doc_id)}</b> <span class="muted">${esc(d.title || "")}</span></td><td class="num">${d.chunks}</td><td class="muted">${esc((d.modified_at || "").slice(0, 16).replace("T", " "))}</td>
-      <td><button class="reject" onclick="deleteKnowledge('${esc(d.doc_id)}')">Delete</button></td></tr>`).join("")}
-    </tbody></table>
-    <div class="muted mt-2">The retriever serves changes immediately — the next ticket drafts against the new policy.</div>`
+      <td><button class="reject btn-sm" onclick="deleteKnowledge('${esc(d.doc_id)}')">Delete</button></td></tr>`).join("")}
+    </tbody></table></div>
+    <div class="note mt-2">The retriever serves changes immediately — the next ticket drafts against the new policy.</div>`
     : '<span class="muted">Corpus empty — add a policy document below.</span>';
 }
 
@@ -1443,13 +1501,16 @@ async function demoTicket() {
 function renderRun(r) {
   const pills = {auto_resolved: "ok", human_review: "warn", approved_executed: "ok",
                  rejected: "bad", failed: "bad"};
-  const steps = (r.trace||[]).map(t => `<tr><td>${esc(t.agent)}</td><td>${t.duration_ms} ms</td><td>${esc(truncate(t.output_summary, 90))}</td></tr>`).join("");    $("ticket_out").innerHTML = `
+  const steps = (r.trace||[]).map(t => `<tr><td>${esc(t.agent)}</td><td class="num">${t.duration_ms} ms</td><td>${esc(truncate(t.output_summary, 90))}</td></tr>`).join("");
+  $("ticket_out").innerHTML = `
     <div class="pill ${pills[r.disposition] || "neutral"}">${r.disposition.replace(/_/g, " ")}</div>
     ${r.review_id ? `<span class="muted"> review ${esc(r.review_id)} queued</span>` : ""}
     <div class="muted mt-1">cost $${(r.total_cost_usd||0).toFixed(5)} · ${r.total_latency_ms} ms · risk ${r.decision?r.decision.risk_score:"—"}</div>
     ${r.final_response ? `<div class="quote mt-2">${esc(r.final_response)}</div>` : ""}
     ${r.error ? `<div class="bad">${esc(r.error)}</div>` : ""}
-    <table><tbody>${steps}</tbody></table>`;
+    <div class="table-scroll mt-3">
+      <table aria-label="Agent trace for this run"><tbody>${steps}</tbody></table>
+    </div>`;
 }
 
 async function decide(id, verdict) {

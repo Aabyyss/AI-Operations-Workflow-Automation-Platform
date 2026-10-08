@@ -206,6 +206,50 @@ def test_dashboard_stays_self_contained():
         assert external not in HTML, external
 
 
+# ---------------------------------------------------------------- access
+
+def test_every_visible_field_has_a_label_bound_to_it():
+    """A <label> sitting above an input is decoration unless it names the
+    control's id — which is the only part a screen reader reads aloud. The
+    dashboard shipped thirteen unbound labels before this was pinned.
+    Checkboxes are exempt: the switch wraps its own input."""
+    tags = re.findall(r"<(?:input|textarea|select)[^>]*>", HTML)
+    visible = [t for t in tags
+               if 'type="checkbox"' not in t and 'type="radio"' not in t]
+    assert visible
+    unlabelled = []
+    for tag in visible:
+        m = re.search(r'id="([^"]+)"', tag)
+        if not m or f'for="{m.group(1)}"' not in HTML:
+            unlabelled.append(m.group(1) if m else tag)
+    assert not unlabelled, unlabelled
+
+
+def test_the_page_has_a_landmark_and_a_way_past_the_navigation():
+    assert 'class="skip-link" href="#main"' in HTML
+    assert 'id="main"' in HTML
+    assert '<main' in HTML
+    assert 'lang="en"' in HTML
+
+
+def test_global_controls_are_not_left_to_the_browser_defaults():
+    """A keyboard user needs one visible focus treatment, and the OS needs a
+    way to switch off the animation."""
+    assert ":focus-visible{outline:2px solid var(--accent)" in HTML
+    assert "prefers-reduced-motion: reduce" in HTML
+    # Nothing may suppress the outline without putting something back.
+    assert "outline:none" not in HTML.replace(
+        "input:focus,textarea:focus,select:focus{outline:none", "")
+
+
+def test_async_results_are_announced():
+    """Feedback that only exists visually is feedback half the users miss."""
+    for region in ('id="cc_msg"', 'id="kb_msg"', 'id="ticket_out"'):
+        i = HTML.index(region)
+        tag = HTML[HTML.rindex("<", 0, i):HTML.index(">", i)]
+        assert "aria-live" in tag, region
+
+
 def test_design_tokens_define_scales_not_just_colours():
     scales = _tokens(_block(":root"))
     for token in ("--sp-4", "--r-md", "--fs-md", "--ease", "--dur-fast",
