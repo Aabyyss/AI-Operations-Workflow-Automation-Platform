@@ -10,6 +10,8 @@ services:
       - AIOPS_CHAT_MODEL=${AIOPS_CHAT_MODEL:-gpt-4o-mini}
       # ---- security (all off by default) ----
       - AIOPS_API_KEY=${AIOPS_API_KEY:-}
+      - AIOPS_SHADOW=${AIOPS_SHADOW:-0}
+      - AIOPS_RECEIPT_KEY=${AIOPS_RECEIPT_KEY:-}
       - AIOPS_WEBHOOK_SECRET=${AIOPS_WEBHOOK_SECRET:-}
       - AIOPS_RATE_LIMIT=${AIOPS_RATE_LIMIT:-0}
       # ---- observability ----

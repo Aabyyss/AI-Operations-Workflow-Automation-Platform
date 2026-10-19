@@ -24,6 +24,8 @@ to `.env`). Defaults are safe: **mock mode, offline, no keys**.
 | `AIOPS_API_KEY` | — | master key; enables auth, grants the **operator** role |
 | `AIOPS_APPROVER_KEY` | — | role-scoped key: read + review decisions |
 | `AIOPS_ADMIN_KEY` | — | role-scoped key: admin mutations (prune) — never approval decisions |
+| `AIOPS_SHADOW` | `0` | `1` scores every ticket through the real gates and executes nothing (no draft, refund, review or run record); see §8 |
+| `AIOPS_RECEIPT_KEY` | — | hex Ed25519 seed signing decision receipts; unset = generated once into `data/receipt_signing_key.json` |
 
 Changing a governance threshold is a **governance decision** — see
 [GOVERNANCE.md](GOVERNANCE.md), not a tuning knob.
@@ -208,6 +210,48 @@ unchanged.
 | Edited a `.md` by hand, drafts unchanged | retriever still holds the old index | `POST /api/knowledge/reload` (API-created docs reload automatically) |
 
 ## 7. Upgrading / migrating
+
+### 7.1 Moving retrieval to pgvector
+
+Document storage and retrieval move separately, and only the second needs a
+model:
+
+```bash
+pip install -r requirements-postgres.txt
+python -m scripts.migrate_to_postgres --dsn "$AIOPS_DATABASE_URL" --replace --verify
+python -m scripts.migrate_to_postgres --dsn "$AIOPS_DATABASE_URL" --embeddings   # needs AIOPS_MODE=live
+AIOPS_STORAGE=postgres AIOPS_DATABASE_URL=... uvicorn backend.main:app
+```
+
+`/ready` then reports `"retrieval_backend": "pgvector"`. If it still says
+`tfidf`, the vector index was not built — the retriever falls back rather
+than failing, so this check is the only place the difference is visible.
+`--embeddings` refuses to run without a key instead of leaving an empty
+table, because an empty index reads to the pipeline as "no policy matched".
+
+## 8. Receipts and shadow mode
+
+- **Export a receipt:** `GET /api/runs/<run_id>/receipt.json` (the dashboard's
+  Receipt button). The file is the artifact; nothing is rendered.
+- **Verify it offline:** `python -m scripts.verify_receipt receipt.json` — no
+  server, no database, no shared secret. `--json` for machines,
+  `--require-root` when the auditor must prove nothing came before the bundle.
+- **Verify this deployment's chain:** `GET /api/receipts/verify`; the public
+  key is at `GET /api/receipts/public-key` and is also embedded in every
+  receipt. Publish it where an auditor can pin it through a channel they
+  already trust — a receipt is self-verifying, but only the pin tells them
+  *whose* key signed it.
+- **Key handling:** `AIOPS_RECEIPT_KEY` should be set explicitly on any shared
+  deployment; the generated dev key lives in `data/receipt_signing_key.json`.
+  Rotating the key makes older receipts fail against the newly published key —
+  keep the old one recorded if you need them verifiable.
+- **A run with no receipt** says so on the run record (`receipt_error`) and in
+  the dashboard. Signing happens after the run is stored, so a signing failure
+  never hides or discards a decision that was executed.
+- **Shadow mode:** `AIOPS_SHADOW=1` then read `GET /api/analytics/shadow`. It
+  reports the would-have escalations and their triggers; it writes to its own
+  collection, so containment and escalation rates do not move. Clear a window
+  with `DELETE /api/analytics/shadow` (admin key).
 
 - Config defaults live in `backend/config.py`; env vars override per deployment.
 - The knowledge base is versioned with the repo — policy changes ship as PRs,
