@@ -103,6 +103,19 @@ def _usd(v: float | None) -> str:
     return "$" + str(d.quantize(unit, rounding=ROUND_HALF_UP))
 
 
+def _loaded_note(p, c: CostComparison) -> str:
+    """The second line under a plan's bill, only when labour is included.
+
+    Returning an empty string otherwise is deliberate: the default page must
+    stay byte-identical to the artifact already in marketing/, which is what
+    the provenance test checks.
+    """
+    if c.comparison_basis != "fully_loaded" or p.fully_loaded_monthly_usd is None:
+        return ""
+    return (f"<div class=\"note\">{_money(p.fully_loaded_monthly_usd)} loaded "
+            f"(+{_money(p.handoff_labour_usd)} handoff)</div>")
+
+
 def _plan_rows(c: CostComparison) -> str:
     rows = []
     for p in c.plans:
@@ -119,7 +132,7 @@ def _plan_rows(c: CostComparison) -> str:
         rows.append(
             f"<tr><td><a href=\"{_e(p.source)}\">{_e(p.vendor)}</a>"
             f"<div class=\"note\">{_e(p.note)}</div></td>"
-            f"<td class=\"num\">{_money(p.monthly_usd)}</td>"
+            f"<td class=\"num\">{_money(p.monthly_usd)}{_loaded_note(p, c)}</td>"
             f"<td class=\"num\">{_money(p.annual_usd)}</td>"
             f"<td class=\"num\">{_usd(p.cost_per_ticket_usd)}</td>"
             f"<td class=\"num\">{crossover}</td>"
@@ -148,10 +161,28 @@ def _crossover_callout(c: CostComparison) -> str:
         parts = ", ".join(f"{_e(p.vendor)} {p.breakeven_resolution_rate_pct}%"
                           for p in sorted(others, key=lambda x: x.breakeven_resolution_rate_pct))  # type: ignore[arg-type]
         tail = f"<br><span class=\"note\">Also modelled: {parts}.</span>"
-    return (f"<div class=\"callout\"><b>If {_e(lead.vendor)} resolves more than "
+    # "Above" or "below" depends on whether a human touch costs more than the
+    # vendor's meter. Saying the wrong direction is worse than saying nothing.
+    direction = "fewer" if lead.breakeven_note.startswith("below") else "more"
+    return (f"<div class=\"callout\"><b>If {_e(lead.vendor)} resolves {direction} than "
             f"{lead.breakeven_resolution_rate_pct}% of these conversations, "
             f"you are paying more than running it in-house.</b>{tail}<br>"
             f"<span class=\"note\">{_e(lead.breakeven_note)}.</span></div>")
+
+
+def _handoff_section(c: CostComparison) -> str:
+    """The paragraph that stops "cheaper" from meaning "cheaper for us".
+
+    Empty unless labour is billed, so the default page is unchanged.
+    """
+    if c.comparison_basis != "fully_loaded":
+        return ""
+    total = sum(p.handoff_labour_usd for p in c.plans if p.monthly_usd is not None)
+    n = len([p for p in c.plans if p.monthly_usd is not None]) or 1
+    return (f"<div class=\"note\">Fully loaded: each plan's bill plus the human minutes its "
+            f"unresolved tickets leave on your queue ({_money(total / n)} at these inputs); "
+            f"our side carries {_money(c.our_handoff_labour_usd)} for its "
+            f"{c.escalations_per_month:,.0f} escalations/month. Both at the same rate.</div>")
 
 
 def _lose_section(c: CostComparison) -> str:
@@ -176,8 +207,12 @@ def render_one_pager(c: CostComparison, *, tagline: str = "",
                      repo_url: str = REPO_URL) -> str:
     """Render a self-contained, print-ready one-pager for one comparison."""
     inputs = c.inputs
-    human = ("human review time included" if inputs.get("include_human_review_cost")
-             else "human review time excluded")
+    if c.comparison_basis == "fully_loaded":
+        human = (f"handoff labour billed on both sides at "
+                 f"{inputs['human_minutes_per_escalation']:g} min × "
+                 f"${inputs['human_hourly_rate_usd']:g}/h")
+    else:
+        human = "human review time excluded"
     basis_class = "good" if c.measurement_basis == "measured" else "warn"
     caveats = "".join(f"<li>{_e(x)}</li>" for x in c.caveats)
     assumptions = "".join(f"<li>{_e(x)}</li>" for x in c.assumptions)
@@ -224,7 +259,7 @@ def render_one_pager(c: CostComparison, *, tagline: str = "",
 <h2>The number to argue about</h2>
 {_crossover_callout(c)}
 
-<h2>Plan by plan</h2>
+<h2>Plan by plan</h2>{_handoff_section(c)}
 <table>
   <thead><tr><th>Plan (published price, linked)</th><th class="num">$/month</th>
     <th class="num">$/year</th><th class="num">$/ticket</th>

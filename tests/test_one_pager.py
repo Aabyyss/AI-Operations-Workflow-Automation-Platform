@@ -161,6 +161,39 @@ def test_endpoint_serves_html_and_matches_the_cli_renderer(client):
     assert r.text == render_one_pager(compare_costs(storage.all("runs"), req))
 
 
+def test_handoff_labour_is_rendered_only_when_it_is_billed():
+    """The committed page is generated without labour; adding a line to it
+    unconditionally would silently change an artifact a buyer already has."""
+    flat = render_one_pager(_comparison())
+    assert "loaded (+" not in flat
+    assert "Fully loaded:" not in flat
+    assert "human review time excluded" in flat
+
+    loaded = render_one_pager(_comparison(include_human_review_cost=True,
+                                          human_hourly_rate_usd=30.0))
+    assert "handoff labour billed on both sides at 6 min × $30/h" in loaded
+    assert "loaded (+$2,250.00 handoff)" in loaded     # 750 unresolved × $3
+    assert "Fully loaded:" in loaded
+    assert "Both at the same rate" in loaded
+
+
+def test_crossover_wording_follows_the_direction_of_the_crossover():
+    """A floor said as a ceiling is worse than no sentence at all."""
+    rising = render_one_pager(_comparison())
+    assert "resolves more than" in rising
+    assert "resolves fewer than" not in rising
+
+    # Labour ($20/h → $2.00 a touch) costs more than the meter ($0.99), so
+    # resolving more *saves* money and the crossover is a floor. Our side is
+    # parked between the two so a floor exists inside 0–100%.
+    falling = render_one_pager(_comparison(include_human_review_cost=True,
+                                           human_hourly_rate_usd=20.0,
+                                           platform_monthly_usd=2500))
+    assert "resolves fewer than" in falling
+    assert "resolves more than" not in falling
+    assert "costs more than running the pipeline" in falling
+
+
 def test_endpoint_validates_its_inputs(client):
     assert client.get("/api/analytics/cost-comparison/one-pager.html",
                       params={"monthly_volume": 0}).status_code == 422
