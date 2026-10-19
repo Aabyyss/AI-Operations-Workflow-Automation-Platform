@@ -1,0 +1,61 @@
+{
+ "manifest_version": 1,
+ "generated_by": "scripts.cost_onepager",
+ "artifact": "cost-one-pager.html",
+ "artifact_sha256": "66c827c839ee28de1195dde9f775255a087fbc15c06d3627ab2b3f98da096a5a",
+ "renderer": {
+  "module": "backend.one_pager",
+  "function": "render_one_pager",
+  "options": {}
+ },
+ "request": {
+  "monthly_volume": 1500,
+  "resolution_rate_pct": 50.0,
+  "seats": 0,
+  "plan_slugs": null,
+  "per_outcome_usd": null,
+  "seat_price_usd": null,
+  "flat_monthly_usd": null,
+  "platform_monthly_usd": 50.0,
+  "include_human_review_cost": false,
+  "human_hourly_rate_usd": 25.0,
+  "human_minutes_per_escalation": 6.0
+ },
+ "ledger": {
+  "decisions": 7,
+  "cost_per_decision_usd": 0.00018,
+  "measurement_basis": "indicative",
+  "escalations_per_month": 428.6,
+  "mode": "mock"
+ },
+ "ledger_excerpt": [
+  {
+   "disposition": "auto_resolved",
+   "total_cost_usd": 0.000235
+  },
+  {
+   "disposition": "auto_resolved",
+   "total_cost_usd": 0.00014
+  },
+  {
+   "disposition": "auto_resolved",
+   "total_cost_usd": 0.00019
+  },
+  {
+   "disposition": "approved_executed",
+   "total_cost_usd": 0.000162
+  },
+  {
+   "disposition": "human_review",
+   "total_cost_usd": 0.000135
+  },
+  {
+   "disposition": "auto_resolved",
+   "total_cost_usd": 0.000137
+  },
+  {
+   "disposition": "auto_resolved",
+   "total_cost_usd": 0.000235
+  }
+ ]
+}

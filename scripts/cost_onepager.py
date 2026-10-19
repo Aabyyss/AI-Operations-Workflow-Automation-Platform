@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from backend.cost_compare import compare_costs  # noqa: E402
 from backend.models import CostComparisonRequest  # noqa: E402
 from backend.one_pager import render_one_pager  # noqa: E402
+from backend.provenance import verify, write_artifact  # noqa: E402
 from backend.store import storage  # noqa: E402
 
 DEFAULT_OUT = Path(__file__).resolve().parent.parent / "marketing" / "cost-one-pager.html"
@@ -47,9 +48,20 @@ def main() -> int:
     ap.add_argument("--human-minutes", type=float, default=6.0,
                     help="minutes per escalated ticket")
     ap.add_argument("--quiet", action="store_true", help="do not print the summary")
+    ap.add_argument("--verify", action="store_true",
+                    help="check the artifact against its provenance sidecar instead of "
+                         "regenerating it; exits 1 on drift")
     args = ap.parse_args()
 
-    comparison = compare_costs(storage.all("runs"), CostComparisonRequest(
+    if args.verify:
+        result = verify(Path(args.out))
+        print(f"{'ok' if result['ok'] else 'DRIFT'}: {result['reason']}")
+        for key, value in (result.get("checked") or {}).items():
+            print(f"  {key}: {value}")
+        return 0 if result["ok"] else 1
+
+    runs = storage.all("runs")
+    request = CostComparisonRequest(
         monthly_volume=args.volume,
         resolution_rate_pct=args.rate,
         seats=args.seats,
@@ -57,14 +69,16 @@ def main() -> int:
         include_human_review_cost=args.human_cost,
         human_hourly_rate_usd=args.human_rate,
         human_minutes_per_escalation=args.human_minutes,
-    ))
+    )
+    comparison = compare_costs(runs, request)
 
     out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(render_one_pager(comparison), encoding="utf-8")
+    # The HTML and its provenance sidecar are written together: a generator
+    # that can produce one without the other is how artifacts go stale.
+    sidecar = write_artifact(out, render_one_pager(comparison), request, runs)
 
     if not args.quiet:
-        print(f"one-pager written: {out}")
+        print(f"one-pager written: {out} (+ {sidecar.name})")
         print(f"  our side      ${comparison.our_monthly_usd:,.2f}/month "
               f"(${comparison.our_cost_per_ticket_usd} per ticket)")
         print(f"  measured from {comparison.measured_from_decisions} decision(s) "
