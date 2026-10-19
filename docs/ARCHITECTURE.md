@@ -28,14 +28,48 @@
                                    │   escalation                 │
                                    └──────┬───────────┬───────────┘
                                           │           │
-                              ┌───────────▼──┐   ┌────▼─────────────────┐
-                              │ rag.py       │   │ integrations/        │
-                              │ TF-IDF/live  │   │ crm · email ·        │
-                              │ embeddings   │   │ billing · slack      │
-                              └───────┬──────┘   └────┬─────────────────┘
-                                      │               │
-                              knowledge_base/    outbox + audit log
+                    ┌─────────────▼──┐  ┌────▼─────────────────┐
+                    │ rag.py         │  │ integrations/        │
+                    │ TF-IDF always  │  │ crm · email ·        │
+                    │ + vectors.py   │  │ billing · slack      │
+                    └───────┬────────┘  └────┬─────────────────┘
+                            │                │
+                    knowledge_base/     outbox + audit log
+                            │
+              ┌─────────────▼──────────────────────────────┐
+              │ vectors.py — MemoryVectorIndex | PgVectorIndex │
+              │ same two calls: replace(chunks, vectors),      │
+              │ search(vector, k) -> RetrievedChunk            │
+              └────────────────────────────────────────────────┘
+
+After every run (and after every review decision):
+              ┌────────────────────────────────────────────────┐
+              │ receipts.py — Ed25519 sign + hash-chain append  │
+              │ → GET /api/runs/{id}/receipt.json               │
+              │ → python -m scripts.verify_receipt (offline)    │
+              └────────────────────────────────────────────────┘
 ```
+
+### Evidence layer (v1.6)
+
+Four modules exist for people who do not trust this deployment, and each is
+written so that trust can be checked rather than granted.
+
+- **`receipts.py`** signs one artifact per decision and appends it to a
+  hash-chained ledger. The signature covers the canonical payload (sorted
+  keys, no whitespace) and the receipt carries the public key, so a file on
+  disk verifies with nothing else. `ed25519.py` is RFC 8032 in pure Python
+  because an auditor's machine has Python and nothing else.
+- **`shadow.py`** calls the same `run_intake`/`run_knowledge`/`run_decision`
+  functions and stops at the decision. Its own disposition
+  (`shadow_scored`) and its own collection keep it out of containment,
+  escalation and failure rates — it cannot move the numbers it measures.
+- **`provenance.py`** writes a sidecar next to a generated document and can
+  re-render it, which is what makes `--verify` able to fail CI when the
+  committed buyer one-pager drifts from the renderer.
+- **`vectors.py`** puts in-process cosine and pgvector `<=>` behind one
+  interface. `rag.py` always fits TF-IDF first and treats the vector index as
+  an upgrade, so an outage degrades retrieval instead of failing a ticket.
 
 ### Reliability & measurement layer (v1.4)
 
