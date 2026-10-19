@@ -25,6 +25,8 @@ COLLECTION_LIMITS = {
     "usage": (90, 20000),
     "deliveries": (30, 5000),
     "feedback": (180, 5000),
+    # Shadow scoring is an evaluation log, not evidence: it is prunable.
+    "shadow": (30, 20000),
 }
 
 

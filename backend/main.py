@@ -789,6 +789,37 @@ def list_feedback() -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Shadow mode — the gates on live traffic, with the actions switched off
+# ---------------------------------------------------------------------------
+@app.post("/api/shadow/score")
+def shadow_score(ticket: Ticket) -> dict:
+    """Score one ticket through the real gates and record what it would do.
+
+    Nothing is drafted, sent, refunded or queued: the answer to "would it
+    have escalated this?" with no side effect to apologise for.
+    """
+    from .shadow import score
+
+    return score(ticket)
+
+
+@app.get("/api/analytics/shadow")
+def shadow_report() -> dict:
+    """How many tickets shadow mode would have escalated, and on what."""
+    from .shadow import report
+
+    return report()
+
+
+@app.delete("/api/analytics/shadow")
+def clear_shadow(_role: str = Depends(require_admin)) -> dict:
+    """Start a fresh evaluation window (admin mutation, like pruning)."""
+    from .shadow import clear
+
+    return {"cleared": clear()}
+
+
+# ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)

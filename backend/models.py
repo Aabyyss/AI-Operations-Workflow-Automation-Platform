@@ -53,6 +53,10 @@ class Disposition(str, Enum):
     APPROVED_EXECUTED = "approved_executed"  # human approved, then executed
     REJECTED = "rejected"                  # human rejected the AI plan
     FAILED = "failed"
+    # Scored by the same gates with every side effect switched off
+    # (backend/shadow.py). Its own value on purpose: a shadow run must not be
+    # countable as containment or as an escalation anywhere downstream.
+    SHADOW_SCORED = "shadow_scored"
 
 
 # ---------------------------------------------------------------------------

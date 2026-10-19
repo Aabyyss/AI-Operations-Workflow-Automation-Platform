@@ -64,6 +64,12 @@ API_KEY = os.getenv("AIOPS_API_KEY", "")
 # only path.
 APPROVER_KEY = os.getenv("AIOPS_APPROVER_KEY", "")
 ADMIN_KEY = os.getenv("AIOPS_ADMIN_KEY", "")
+# Shadow mode (backend/shadow.py): when on, /api/tickets scores each ticket
+# through the same intake, retrieval and risk gates but executes nothing — no
+# draft, no email, no refund, no review, no run recorded. The evaluation
+# question ("what would it have escalated?") with the blast radius of a log.
+SHADOW_MODE = os.getenv("AIOPS_SHADOW", "0").strip().lower() in ("1", "true", "yes", "on")
+
 # Decision receipts (backend/receipts.py): hex-encoded 32-byte Ed25519 seed
 # used to sign one receipt per pipeline decision. Unset = a key is generated
 # once into DATA_DIR/receipt_signing_key.json (fine for a demo, not for a

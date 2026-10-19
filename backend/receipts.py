@@ -106,7 +106,7 @@ def _sha256(data: bytes) -> str:
 
 
 # --------------------------------------------------------------------- payload
-def _gates() -> dict:
+def gates_snapshot() -> dict:
     """The thresholds in force when this decision was made.
 
     A risk score of 0.31 means nothing without the limit it was compared
@@ -164,7 +164,7 @@ def build_payload(result: PipelineResult, *, receipt_id: str, issued_at: str,
         # building, so every address is redacted before signing.
         "actions_taken": [redact_emails(a) for a in result.actions_taken],
         "mode": config.MODE,
-        "gates": _gates(),
+        "gates": gates_snapshot(),
         "chain": {"index": index, "prev": prev},
     }
 

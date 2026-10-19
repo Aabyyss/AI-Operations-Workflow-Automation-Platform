@@ -278,6 +278,13 @@ def run_escalation(ticket: Ticket, decision: DecisionResult, draft: DraftRespons
 # Orchestration — one function, also exposed to LangGraph in graph.py
 # ---------------------------------------------------------------------------
 def run_pipeline(ticket: Ticket) -> PipelineResult:
+    # Shadow mode is a switch on this one function, not a second pipeline: the
+    # scoring path calls the same agents and stops at the decision.
+    if config.SHADOW_MODE:
+        from .shadow import score_result
+
+        return score_result(ticket)
+
     trace: list[AgentTrace] = []
     usage_log: list = []
     result = PipelineResult(ticket_id=ticket.id, disposition=Disposition.FAILED)
