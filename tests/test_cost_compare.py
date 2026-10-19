@@ -247,7 +247,7 @@ def test_human_review_cost_is_optional_and_uses_measured_escalation():
     assert on.our_components["human_review_usd"] > 0
     assert on.our_monthly_usd > off.our_monthly_usd
     assert on.escalations_per_month == pytest.approx(off.escalations_per_month)
-    assert any("Human review included" in a for a in on.assumptions)
+    assert any("Handoff labour is billed on both sides" in a for a in on.assumptions)
     assert any("Handoff labour is excluded" in c for c in off.caveats)
 
 

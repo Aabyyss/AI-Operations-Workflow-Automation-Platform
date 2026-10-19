@@ -290,7 +290,9 @@ class CostComparisonRequest(BaseModel):
         default=50.0, ge=0, description="Hosting/infra allowance for the pipeline")
     include_human_review_cost: bool = Field(
         default=False,
-        description="Price the human minutes our escalations consume")
+        description=("Price handoff labour on both sides: the human minutes our "
+                     "escalations consume, and the minutes a vendor's unresolved "
+                     "tickets leave on the same queue"))
     human_hourly_rate_usd: float = Field(default=25.0, ge=0)
     human_minutes_per_escalation: float = Field(default=6.0, ge=0)
 
@@ -302,9 +304,19 @@ class PlanCost(BaseModel):
     model: Literal["per_outcome", "seat_plus_outcome", "flat_platform", "quote_only"]
     source: str = ""
     note: str = ""
+    # What the vendor invoices, before the labour their price leaves behind.
     monthly_usd: float | None = None
     annual_usd: float | None = None
     cost_per_ticket_usd: float | None = None
+    # The human minutes this plan's *unresolved* tickets consume, priced at
+    # the buyer's own rate. Zero unless handoff labour is included.
+    handoff_labour_usd: float = 0.0
+    # Bill + handoff labour: the only fair thing to compare against a
+    # pipeline whose own number also includes its escalations.
+    fully_loaded_monthly_usd: float | None = None
+    fully_loaded_annual_usd: float | None = None
+    fully_loaded_cost_per_ticket_usd: float | None = None
+    fully_loaded_delta_usd: float | None = None
     components: dict[str, float] = Field(default_factory=dict)
     # Resolution rate above which this plan costs more than running the
     # pipeline. None when it cannot be computed (quote-only, or 0 outcomes
@@ -312,7 +324,10 @@ class PlanCost(BaseModel):
     breakeven_resolution_rate_pct: float | None = None
     breakeven_note: str = ""
     monthly_delta_usd: float | None = Field(
-        default=None, description="plan − ours: positive means the plan costs more")
+        default=None,
+        description=("plan − ours: positive means the plan costs more. Uses the "
+                     "fully loaded figure when handoff labour is included, the "
+                     "vendor bill otherwise"))
     verdict: Literal["cheaper", "more_expensive", "quote_required", "not_comparable"] = "not_comparable"
 
 
@@ -329,6 +344,14 @@ class CostComparison(BaseModel):
     our_monthly_usd: float = 0.0
     our_annual_usd: float = 0.0
     our_cost_per_ticket_usd: float = 0.0
+    # "bill": vendor prices vs our measured cost, handoff labour excluded.
+    # "fully_loaded": both sides also carry the human minutes they leave.
+    comparison_basis: Literal["bill", "fully_loaded"] = "bill"
+    our_bill_usd: float = Field(
+        default=0.0, description="decisions + infra, before our own handoff labour")
+    our_handoff_labour_usd: float = 0.0
+    handoff_per_ticket_usd: float = Field(
+        default=0.0, description="cost of one ticket reaching a human, at the buyer's rate")
     our_components: dict[str, float] = Field(default_factory=dict)
     plans: list[PlanCost] = Field(default_factory=list)
     cheapest_plan_slug: str | None = None
