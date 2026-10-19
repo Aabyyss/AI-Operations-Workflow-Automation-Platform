@@ -214,5 +214,5 @@ def test_build_storage_postgres_constructs_lazy(monkeypatch):
 def test_store_and_pgshare_collection_names():
     from backend.store import COLLECTION_NAMES, Storage
 
-    assert len(COLLECTION_NAMES) == 11
+    assert len(COLLECTION_NAMES) == 12
     assert Storage().collection_names() == sorted(COLLECTION_NAMES)
