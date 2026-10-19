@@ -8,3 +8,4 @@ data/
 .pytest_cache/
 *.log
 .DS_Store
+node_modules/
