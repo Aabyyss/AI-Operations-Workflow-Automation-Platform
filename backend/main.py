@@ -13,7 +13,8 @@ from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                Response, StreamingResponse)
 from pydantic import BaseModel
 
-from . import config, designer, exports, metrics, outbound, pipeline, ratelimit, reqlog, security, store
+from . import (config, designer, exports, metrics, outbound, pipeline, ratelimit,
+               receipts, reqlog, security, store)
 from .security import require_admin, require_approver
 from .analytics import approval_sla_metrics
 from .budget import budget_status
@@ -191,6 +192,54 @@ def get_ticket(ticket_id: str) -> dict:
 def list_runs(limit: int = 50) -> list[dict]:
     """Full pipeline run records — the BI 'Runs' table feed."""
     return storage.all("runs")[-limit:]
+
+
+# ---------------------------------------------------------------------------
+# Signed decision receipts — the artifact that leaves the deployment
+# ---------------------------------------------------------------------------
+@app.get("/api/receipts/public-key")
+def receipt_public_key() -> dict:
+    """The key an auditor pins. Every receipt also carries its own copy."""
+    return {"alg": receipts.SIGNATURE_ALG,
+            "key_id": receipts.key_id(),
+            "public_key": receipts.public_key_hex()}
+
+
+@app.get("/api/receipts")
+def list_receipts(limit: int = 50) -> list[dict]:
+    """Signed decisions, newest last (the chain order)."""
+    return receipts.all_receipts()[-limit:]
+
+
+@app.get("/api/receipts/verify")
+def verify_stored_receipts(require_root: bool = False) -> dict:
+    """Verify this deployment's whole chain: signatures and links."""
+    return receipts.verify_chain(receipts.all_receipts(), require_root=require_root)
+
+
+@app.post("/api/receipts/verify")
+def verify_supplied_receipts(body: dict) -> dict:
+    """Verify a receipt (or {"receipts": [...]}) someone hands you.
+
+    Same check as `python -m scripts.verify_receipt`, over HTTP — for the
+    auditor who would rather paste JSON than install anything.
+    """
+    if isinstance(body.get("receipts"), list):
+        return receipts.verify_chain(body["receipts"],
+                                     require_root=bool(body.get("require_root")))
+    return receipts.verify_receipt(body)
+
+
+@app.get("/api/runs/{run_id}/receipt.json")
+def download_receipt(run_id: str) -> Response:
+    """The receipt as a file: this is the artifact, not a rendered view."""
+    receipt = receipts.receipt_for_run(run_id)
+    if not receipt:
+        raise HTTPException(404, f"no receipt for run: {run_id}")
+    resp = JSONResponse(receipt)
+    resp.headers["Content-Disposition"] = (
+        f'attachment; filename="receipt-{run_id}.json"')
+    return resp
 
 
 @app.get("/api/runs/stream")
