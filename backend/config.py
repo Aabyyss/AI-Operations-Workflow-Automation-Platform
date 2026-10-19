@@ -64,6 +64,11 @@ API_KEY = os.getenv("AIOPS_API_KEY", "")
 # only path.
 APPROVER_KEY = os.getenv("AIOPS_APPROVER_KEY", "")
 ADMIN_KEY = os.getenv("AIOPS_ADMIN_KEY", "")
+# Decision receipts (backend/receipts.py): hex-encoded 32-byte Ed25519 seed
+# used to sign one receipt per pipeline decision. Unset = a key is generated
+# once into DATA_DIR/receipt_signing_key.json (fine for a demo, not for a
+# deployment that has to prove who signed).
+RECEIPT_KEY = os.getenv("AIOPS_RECEIPT_KEY", "")
 # Shared secret used to verify HMAC-SHA256 signatures on the n8n intake
 # webhook. Unset = signatures are accepted but not enforced.
 WEBHOOK_SECRET = os.getenv("AIOPS_WEBHOOK_SECRET", "")

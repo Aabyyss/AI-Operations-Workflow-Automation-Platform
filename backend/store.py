@@ -19,7 +19,7 @@ _lock = threading.Lock()
 # (JSON files, Postgres) exposes the same names to health, backup and docs.
 COLLECTION_NAMES = ("analyses", "tickets", "runs", "reviews", "usage",
                     "audit", "outbox", "workflows", "feedback",
-                    "deliveries", "cycle_times")
+                    "deliveries", "cycle_times", "receipts")
 
 
 class Storage:

@@ -19,7 +19,7 @@ import re
 import time
 from typing import Any
 
-from . import config, store
+from . import config, receipts, store
 from .integrations import audit_log
 from .llm import get_llm, record_usage
 from .models import (
@@ -322,4 +322,21 @@ def run_pipeline(ticket: Ticket) -> PipelineResult:
     for u in usage_log:
         store.append("usage", u.model_dump())
     store.append("runs", result.model_dump())
+
+    # The decision is signed after it is stored, so the ledger never depends
+    # on signing succeeding. A failed signature is recorded on the run rather
+    # than swallowed or turned into a run failure: the work happened, and the
+    # absence of a receipt is itself something an auditor should see.
+    try:
+        receipt = receipts.issue(result)
+        result.receipt_id = receipt["payload"]["receipt_id"]
+        result.receipt_sha256 = receipt["payload_sha256"]
+        store.storage.update("runs", result.id, {
+            "receipt_id": result.receipt_id,
+            "receipt_sha256": result.receipt_sha256,
+        })
+    except Exception as exc:  # noqa: BLE001 — surfaced on the record, not hidden
+        result.receipt_error = f"{type(exc).__name__}: {exc}"
+        store.storage.update("runs", result.id, {"receipt_error": result.receipt_error})
+        audit_log("receipt_failed", {"run_id": result.id, "error": result.receipt_error})
     return result

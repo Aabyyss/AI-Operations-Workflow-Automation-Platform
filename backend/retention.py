@@ -15,6 +15,11 @@ from .models import iso_now  # noqa: F401  (used by callers for stamps)
 
 COLLECTION_LIMITS = {
     # collection: (max_age_days, max_records_kept)
+    #
+    # `receipts` is deliberately absent: a signed decision receipt is an
+    # artifact someone else holds a copy of, and pruning this deployment's
+    # copy would break the chain an auditor verifies against. Retention is
+    # the wrong tool for evidence — export it or leave it.
     "runs": (90, 5000),
     "tickets": (90, 5000),
     "usage": (90, 20000),

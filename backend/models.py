@@ -207,6 +207,12 @@ class PipelineResult(BaseModel):
     total_latency_ms: float = 0.0
     cycle_seconds: float | None = None
     error: str | None = None
+    # The signed artifact for this decision (backend/receipts.py). A run that
+    # could not be signed still counts — but it says so, instead of silently
+    # looking like every other run in the ledger.
+    receipt_id: str | None = None
+    receipt_sha256: str | None = None
+    receipt_error: str | None = None
 
 
 # ---------------------------------------------------------------------------
