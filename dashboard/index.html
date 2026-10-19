@@ -325,6 +325,10 @@
   .run-subject{flex:1; min-width:120px; font-size:var(--fs-sm);
                overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .run-age{flex:none; font-size:var(--fs-2xs); color:var(--text-subtle)}
+  /* Outcome, risk and cost on the row itself: a list of "runs" that shows
+     only what came in is a list of tickets, not of runs. */
+  .run-meta{flex:none; font:var(--fs-2xs)/1.4 var(--font-mono);
+            color:var(--text-subtle); font-variant-numeric:tabular-nums}
   .run-actions{display:flex; gap:var(--sp-1); flex:none; margin-left:auto}
 
   /* An empty panel is a moment of truth: say what it means, not nothing. */
@@ -941,11 +945,12 @@ window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", ()
 
 async function loadAll() {
   try {
-    const [summary, reviews, usage, audit, runs, sla, perf, budget, drift, health, quality, ab, knowledge, plans] = await Promise.all([
+    const [summary, reviews, usage, audit, runs, tickets, sla, perf, budget, drift, health, quality, ab, knowledge, plans] = await Promise.all([
       api("/api/analytics/summary"),
       api("/api/reviews"),
       api("/api/usage"),
       api("/api/audit?limit=12"),
+      api("/api/runs?limit=8"),
       api("/api/tickets"),
       api("/api/analytics/approvals"),
       api("/api/analytics/runs"),
@@ -962,7 +967,7 @@ async function loadAll() {
     renderDispositions(summary);
     renderReviews(reviews);
     renderAudit(audit);
-    renderRuns(runs);
+    renderRuns(runs, tickets);
     renderBudget(budget);
     renderDrift(drift);
     renderHealth(health);
@@ -1239,7 +1244,7 @@ function renderCostCompare(r) {
       <table aria-label="Modelled market plans against this pipeline">
       <thead><tr><th>Plan (source)</th><th class="num">$ / month</th><th class="num">$ / year</th>
         <th class="num">$ / ticket</th>
-        <th class="num">Costs more above</th><th>Verdict</th></tr></thead>
+        <th>Costs more above</th><th>Verdict</th></tr></thead>
       <tbody>${rows}
         <tr class="cc-ours">
           <td>This pipeline</td><td class="num">${moneyShort(r.our_monthly_usd)}</td>
@@ -1399,20 +1404,28 @@ async function deleteKnowledge(docId) {
   } catch (e) { alert(e.message || String(e)); }
 }
 
-function renderRuns(tickets) {
-  if (!tickets.length) {
+function renderRuns(runs, tickets) {
+  // Runs, not tickets: feedback and replay both key on the run id (the API
+  // 404s on a ticket id), and a run row without its disposition is only the
+  // inbound half of the story.
+  const recent = (runs || []).slice(-8).reverse();
+  if (!recent.length) {
     $("runs_out").innerHTML =
       '<div class="empty-state">No runs yet — run a ticket above and it will appear here.</div>';
     return;
   }
-  lastRuns = tickets;
-  const ids = [...new Set(tickets.map(t=>t.id))].slice(-8).reverse();
-  $("runs_out").innerHTML = ids.map(id => {
-    const t = tickets.find(x=>x.id===id);
+  lastRuns = recent;
+  const subjectOf = new Map((tickets || []).map(t => [t.id, t.subject]));
+  $("runs_out").innerHTML = recent.map(r => {
+    const id = r.id;
+    const subject = subjectOf.get(r.ticket_id) || "no subject";
+    const risk = r.decision ? r.decision.risk_score : null;
     return `<div class="run">
+      ${dispositionPill(r.disposition)}
       <span class="run-id">${esc(id)}</span>
-      <span class="run-subject" title="${esc(t.subject || "")}">${esc(t.subject || "no subject")}</span>
-      <span class="run-age" title="${esc(t.created_at || "")}">${esc(timeAgo(t.created_at))}</span>
+      <span class="run-subject" title="${esc(subject)}">${esc(subject)}</span>
+      <span class="run-meta">risk ${risk === null ? "—" : risk} · $${(r.total_cost_usd || 0).toFixed(5)}</span>
+      <span class="run-age" title="${esc(r.created_at || "")}">${esc(timeAgo(r.created_at))}</span>
       <span class="run-actions">
       <button class="ghost btn-sm" title="Mark this run as correct" aria-label="Mark run ${esc(id)} as correct"
               onclick="giveFeedback('${id}','up')">👍</button>
@@ -1498,12 +1511,19 @@ async function demoTicket() {
   catch(e) { $("ticket_out").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
 }
 
+// One disposition vocabulary for the whole dashboard, defined once.
+const DISPOSITION_PILL = {auto_resolved: "ok", human_review: "warn",
+                          approved_executed: "ok", rejected: "bad", failed: "bad"};
+
+function dispositionPill(d) {
+  const label = String(d || "unknown").replace(/_/g, " ");
+  return `<span class="pill ${DISPOSITION_PILL[d] || "neutral"}">${esc(label)}</span>`;
+}
+
 function renderRun(r) {
-  const pills = {auto_resolved: "ok", human_review: "warn", approved_executed: "ok",
-                 rejected: "bad", failed: "bad"};
   const steps = (r.trace||[]).map(t => `<tr><td>${esc(t.agent)}</td><td class="num">${t.duration_ms} ms</td><td>${esc(truncate(t.output_summary, 90))}</td></tr>`).join("");
   $("ticket_out").innerHTML = `
-    <div class="pill ${pills[r.disposition] || "neutral"}">${r.disposition.replace(/_/g, " ")}</div>
+    ${dispositionPill(r.disposition)}
     ${r.review_id ? `<span class="muted"> review ${esc(r.review_id)} queued</span>` : ""}
     <div class="muted mt-1">cost $${(r.total_cost_usd||0).toFixed(5)} · ${r.total_latency_ms} ms · risk ${r.decision?r.decision.risk_score:"—"}</div>
     ${r.final_response ? `<div class="quote mt-2">${esc(r.final_response)}</div>` : ""}
