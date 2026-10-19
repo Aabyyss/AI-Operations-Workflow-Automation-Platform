@@ -94,6 +94,38 @@ def test_admin_can_write_knowledge_but_cannot_decide_reviews(scoped_client):
     assert r.status_code == 200
 
 
+def test_approver_cannot_reload_the_knowledge_index(scoped_client):
+    """The reload is a corpus write in disguise: a file dropped on disk
+    becomes policy the moment the index is rebuilt."""
+    r = scoped_client.post("/api/knowledge/reload", headers=_key(scoped_client, "approver-key"))
+    assert r.status_code == 403
+    assert "requires role" in r.json()["detail"]
+
+
+def test_admin_can_reload_the_knowledge_index(scoped_client):
+    r = scoped_client.post("/api/knowledge/reload", headers=_key(scoped_client, "admin-key"))
+    assert r.status_code == 200
+    assert r.json()["chunks"] > 0
+
+
+def test_master_key_can_also_reload(scoped_client):
+    r = scoped_client.post("/api/knowledge/reload", headers=_key(scoped_client, "master-key"))
+    assert r.status_code == 200
+
+
+def test_reload_is_audited(scoped_client):
+    scoped_client.post("/api/knowledge/reload", headers=_key(scoped_client, "admin-key"))
+    events = [e["event"] for e in
+              scoped_client.get("/api/audit", headers=_key(scoped_client, "admin-key")).json()]
+    assert "knowledge_reloaded" in events
+
+
+def test_reload_stays_open_when_auth_is_disabled(monkeypatch, client):
+    """Zero-config local use must not need a key for anything."""
+    monkeypatch.setattr("backend.config.API_KEY", "")
+    assert client.post("/api/knowledge/reload").status_code == 200
+
+
 def test_admin_runs_prune_dry_run(scoped_client):
     r = scoped_client.post("/api/admin/prune", headers=_key(scoped_client, "admin-key"))
     assert r.status_code == 200

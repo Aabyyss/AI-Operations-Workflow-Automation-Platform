@@ -563,7 +563,14 @@ def prune_collections(confirm: bool = False,
 
 
 @app.post("/api/knowledge/reload")
-def reload_knowledge() -> dict:
+def reload_knowledge(_role: str = Depends(require_admin)) -> dict:
+    """Rebuild the RAG index from disk.
+
+    A corpus mutation like any other: it changes what the next customer is
+    told. Reads stay open to every role; writes — including this reload,
+    which is how a file placed out-of-band becomes policy — need operator or
+    admin.
+    """
     n = retriever.reload()
     audit_log("knowledge_reloaded", {"chunks": n})
     return {"chunks": n}
