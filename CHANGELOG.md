@@ -44,7 +44,49 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   numbers; dispositions render as one composition bar instead of three bars
   that never summed to anything; inline style attributes fell from 64 to 18.
 
+- **Cost comparison bills handoff labour on both sides.** The old model priced
+  our escalations and left every per-outcome vendor's unresolved tickets free —
+  the same agents, the same minutes, one side invisible. `include_human_review_cost`
+  now prices both queues at one rate, each plan reports its bill and its fully
+  loaded cost, and verdicts use the loaded figure. When a human touch costs more
+  than the per-outcome price, resolving more *saves* money, so the crossover
+  becomes a floor and the one-pager says "fewer than", not "more than".
+- **Knowledge reload is an admin mutation.** A reload is how a markdown file
+  placed out-of-band becomes policy for the next customer; approvers now get a
+  403, as they already did for create, overwrite and delete.
+- **Dashboard run rows are runs.** They were built from `/api/tickets`, so no
+  row carried a disposition, risk or cost, and the thumbs and Replay buttons
+  passed a ticket id to `/api/runs/{id}/...` — which 404s, which is why the
+  quality gate had no feedback to count. Both fixed, with contract tests.
+
 ### Added
+- **Signed decision receipts** — one artifact per decision, signed with Ed25519
+  (RFC 8032 implemented in `backend/ed25519.py`, verified against the RFC's own
+  vectors) and chained by digest. The payload carries what an auditor needs to
+  judge the decision without the database: disposition, risk and its reason,
+  the gate thresholds in force, proposed actions, quality verdict, the policy
+  documents retrieved, cost and mode. The customer reply is represented by its
+  sha256 — never its text — and addresses are redacted before signing.
+  `GET /api/runs/{id}/receipt.json` exports it; `python -m
+  scripts.verify_receipt` checks it offline with no server and no shared
+  secret; `GET /api/receipts/verify` checks the whole chain, and
+  `require_root` distinguishes "intact" from "intact as far as it goes".
+- **Shadow mode** — `AIOPS_SHADOW=1` scores every ticket through the same
+  intake, retrieval and risk gates and executes nothing: no draft, no email,
+  no refund, no review, and no entry in the run ledger, so containment and
+  escalation rates cannot move while an evaluation runs. `POST
+  /api/shadow/score` for one-offs, `GET /api/analytics/shadow` for the report
+  (would-have escalations, their triggers, per-category split), and a card on
+  the dashboard that says so in those words.
+- **One-pager provenance** — `marketing/cost-one-pager.source.json` records the
+  inputs, the ledger excerpt the comparison read and the artifact digest;
+  `python -m scripts.cost_onepager --verify` re-renders and exits 1 on drift or
+  hand edits, so the committed buyer document cannot go stale in CI.
+- **pgvector retrieval behind one interface** — `backend/vectors.py` puts
+  in-process cosine and pgvector's `<=>` behind `replace`/`search`; TF-IDF stays
+  the zero-config default and the runtime fallback, and `/ready` reports which
+  backend is serving. `python -m scripts.migrate_to_postgres --embeddings`
+  embeds the corpus into the database once during the move.
 - **`docs/DESIGN_SYSTEM.md`** — the token layers, the themes, the component
   inventory and the rules a new component has to follow.
 - **`tests/test_dashboard_theme.py`** — 20 contract tests that act as the
