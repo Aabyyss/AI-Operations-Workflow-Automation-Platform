@@ -25,6 +25,30 @@ from backend import config  # noqa: E402
 from backend.store import COLLECTION_NAMES, storage as json_storage  # noqa: E402
 
 
+def embed_corpus(dsn: str) -> int:
+    """Embed knowledge_base/ into pgvector, so retrieval survives a restart.
+
+    Deliberately explicit rather than relying on AIOPS_STORAGE: a migration
+    runs against a target database that may not be the one this process is
+    configured to use. Raises RuntimeError (not a traceback) when there is no
+    embedding model, because "your key is missing" is the answer.
+    """
+    from backend import config
+    from backend.rag import chunk_markdown
+    from backend.vectors import PgVectorIndex, embed_texts
+
+    chunks: list[dict] = []
+    for path in sorted(config.KNOWLEDGE_DIR.glob("*.md")):
+        chunks.extend(chunk_markdown(path))
+    if not chunks:
+        raise RuntimeError(f"no knowledge documents found in {config.KNOWLEDGE_DIR}")
+
+    vectors = embed_texts([c["text"] for c in chunks])
+    index = PgVectorIndex(dsn)
+    index.ensure_schema()
+    return index.replace(chunks, vectors)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dsn", default=config.DATABASE_URL,
@@ -35,6 +59,8 @@ def main() -> int:
                     help="also provision the pgvector extension + embeddings table")
     ap.add_argument("--verify", action="store_true",
                     help="after copying, compare per-collection counts; exit 1 on mismatch")
+    ap.add_argument("--embeddings", action="store_true",
+                    help="embed knowledge_base/ into pgvector (needs AIOPS_MODE=live + a key)")
     args = ap.parse_args()
 
     if not args.dsn:
@@ -46,6 +72,14 @@ def main() -> int:
     pg = PostgresStorage(args.dsn)
     pg.ensure_schema(with_pgvector=args.pgvector)
     print(f"schema ready ({'with' if args.pgvector else 'without'} pgvector artifacts)")
+
+    if args.embeddings:
+        try:
+            n = embed_corpus(args.dsn)
+        except Exception as exc:  # noqa: BLE001 — a CLI reports, it does not crash
+            print(f"error: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 2
+        print(f"embedded {n} chunk(s) into the pgvector index")
 
     total = 0
     for name in COLLECTION_NAMES:
