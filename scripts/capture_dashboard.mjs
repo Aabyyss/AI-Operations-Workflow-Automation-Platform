@@ -39,6 +39,7 @@ const SECTIONS = [
   "Human-in-the-Loop",
   "Cost by Agent",
   "Drift Canary",
+  "Shadow mode",
   "Quality Gate",
   "A/B Cycle Time",
   "Market cost comparison",

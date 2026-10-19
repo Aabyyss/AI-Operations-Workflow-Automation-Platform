@@ -729,6 +729,10 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
       <h2>Drift Canary</h2>
       <div id="drift_out" class="muted">Loading…</div>
     </div>
+    <div class="card">
+      <h2>Shadow mode</h2>
+      <div id="shadow_out" class="muted">Loading…</div>
+    </div>
   </div>
 
   <div class="row">
@@ -949,7 +953,7 @@ window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", ()
 
 async function loadAll() {
   try {
-    const [summary, reviews, usage, audit, runs, tickets, sla, perf, budget, drift, health, quality, ab, knowledge, plans] = await Promise.all([
+    const [summary, reviews, usage, audit, runs, tickets, sla, perf, budget, drift, shadow, health, quality, ab, knowledge, plans] = await Promise.all([
       api("/api/analytics/summary"),
       api("/api/reviews"),
       api("/api/usage"),
@@ -960,6 +964,7 @@ async function loadAll() {
       api("/api/analytics/runs"),
       api("/api/analytics/budget").catch(() => null),
       api("/api/analytics/drift").catch(() => null),
+      api("/api/analytics/shadow").catch(() => null),
       api("/api/health").catch(() => null),
       api("/api/analytics/quality").catch(() => null),
       api("/api/analytics/ab").catch(() => null),
@@ -974,6 +979,7 @@ async function loadAll() {
     renderRuns(runs, tickets);
     renderBudget(budget);
     renderDrift(drift);
+    renderShadow(shadow);
     renderHealth(health);
     renderQuality(quality);
     renderAB(ab);
@@ -1156,6 +1162,32 @@ function renderDrift(d) {
         <tbody>${rows}</tbody></table>
     </div>
     <div class="note mt-2">Last ${d.window} runs vs previous ${d.window} · alert at ±${d.threshold_pct}pp</div>`;
+}
+
+// Shadow mode is an evaluation, so the card answers the one question it
+// exists for: how much would have gone to a human, and what triggered it.
+function renderShadow(s) {
+  if (!s) { $("shadow_out").innerHTML = '<span class="muted">Shadow report unavailable.</span>'; return; }
+  if (!s.count) {
+    $("shadow_out").innerHTML = `<span class="muted">No tickets scored yet. With
+      <code>AIOPS_SHADOW=1</code> every ticket is scored by the same gates and nothing is
+      executed — no draft, no refund, no review, no run recorded.</span>`;
+    return;
+  }
+  const state = s.live_traffic_is_shadowed
+    ? '<span class="pill warn">on — live traffic, no actions</span>'
+    : '<span class="pill neutral">off — scored on request</span>';
+  const triggers = (s.top_triggers || []).slice(0, 4).map(t =>
+    `<li><span class="ev-payload">${esc(t.trigger)}</span>
+       <span class="muted">×${t.tickets}</span></li>`).join("");
+  $("shadow_out").innerHTML = `${state}
+    <div class="metric mt-2">
+      <div class="metric-label">Would have escalated</div>
+      <div class="metric-value">${s.would_have_escalated}
+        <span class="metric-sub">of ${s.count} scored · ${s.escalation_rate_pct}%</span></div>
+    </div>
+    ${triggers ? `<ul class="mt-2">${triggers}</ul>` : ""}
+    <div class="muted mt-2">${esc(s.what_it_does_not_do)}</div>`;
 }
 
 function renderCosts(usage) {

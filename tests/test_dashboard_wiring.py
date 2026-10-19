@@ -82,6 +82,17 @@ def test_cost_table_shows_the_figure_its_verdict_was_computed_on():
     assert "handoff labour billed on both sides" in body
 
 
+def test_shadow_card_reports_the_would_haves_not_a_guess():
+    load_all = _function("loadAll")
+    assert 'api("/api/analytics/shadow")' in load_all
+    body = _function("renderShadow")
+    assert "would_have_escalated" in body
+    assert "top_triggers" in body
+    assert "what_it_does_not_do" in body
+    # The empty state must not read as "nothing would escalate".
+    assert "No tickets scored yet" in body
+
+
 def test_the_handoff_switch_says_both_sides():
     assert "Bill handoff labour on both sides" in HTML
     assert "Price the human minutes our escalations use" not in HTML
