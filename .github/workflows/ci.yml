@@ -32,6 +32,8 @@ jobs:
         env:
           AIOPS_MODE: mock
         run: python -m pytest -v
+      - name: Verify the committed one-pager has not drifted
+        run: python -m scripts.cost_onepager --verify
       - name: Smoke-test API boot
         run: |
           uvicorn backend.main:app --port 8077 &
@@ -39,7 +41,11 @@ jobs:
             curl -sf http://localhost:8077/health && break || sleep 1
           done
           curl -sf http://localhost:8077/health | grep -q '"status":"ok"'
-          curl -sf -X POST http://localhost:8077/api/tickets/demo | grep -q '"disposition":"auto_resolved"'
+          RESP=$(curl -sf -X POST http://localhost:8077/api/tickets/demo)
+          echo "$RESP" | grep -q '"disposition":"auto_resolved"'
+          RUN=$(echo "$RESP" | python -c "import json,sys; print(json.load(sys.stdin)['id'])")
+          curl -sf -o /tmp/receipt.json "http://localhost:8077/api/runs/$RUN/receipt.json"
+          python -m scripts.verify_receipt /tmp/receipt.json
 
   eval-quality:
     runs-on: ubuntu-latest
