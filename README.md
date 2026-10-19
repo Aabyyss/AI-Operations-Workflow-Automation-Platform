@@ -62,11 +62,16 @@ backend/
   roi.py                      labor + token cost engine
   pipeline.py                 6-agent pipeline + risk gates (source of truth)
   graph.py                    LangGraph orchestration of the same pipeline
-  rag.py                      markdown -> chunks -> TF-IDF/live embeddings
+  rag.py                      markdown -> chunks -> TF-IDF (always) + embeddings when available
   llm.py                      mock / OpenAI-compatible gateway
   mock_ai.py                  deterministic heuristics for offline mode
-  store.py                    swappable persistence (11 collections) + `build_storage()`
+  store.py                    swappable persistence (13 collections) + `build_storage()`
   pgstore.py                  the same interface on one JSONB table (Postgres, opt-in)
+  vectors.py                  retrieval behind one interface: in-process cosine or pgvector
+  receipts.py                 signed decision receipts + hash-chained verification
+  ed25519.py                  RFC 8032 signatures, pure Python, no dependencies
+  provenance.py               sidecar + verifier for generated documents (the one-pager)
+  shadow.py                   score live traffic through the gates, execute nothing
   health.py                   component health report (storage → budget)
   knowledge.py                corpus CRUD: safe slugs, explicit overwrite, auto-reload
   ab_testing.py               ai vs manual cycle-time cohorts (honest-sample gated)
@@ -76,7 +81,7 @@ backend/
   integrations/               CRM, email, billing, Slack + audit log
 knowledge_base/               company policies (RAG corpus — editable over the API)
 n8n/workflows/                importable ticket-intake bridge workflow
-tests/                        227 tests: governance, contracts, security, storage, analytics, dashboard
+tests/                        350 tests: governance, contracts, crypto, security, storage, analytics, dashboard
 ```
 
 ## API tour
@@ -92,6 +97,14 @@ curl localhost:8000/api/analytics/summary                # Power BI feed
 curl -X POST localhost:8000/api/analytics/cost-comparison \
   -d '{"monthly_volume":1500,"resolution_rate_pct":50}'  # market list prices vs our measured cost
 python -m scripts.cost_onepager      # same comparison as a shareable one-pager (marketing/cost-one-pager.html)
+python -m scripts.cost_onepager --verify   # fails if the committed artifact drifted from the renderer
+
+curl -OJ localhost:8000/api/runs/<run_id>/receipt.json   # signed decision receipt
+python -m scripts.verify_receipt receipt.json            # verify it offline: no server, no key
+
+curl -X POST localhost:8000/api/shadow/score -H "Content-Type: application/json" \
+  -d '{"customer_email":"a@b.com","subject":"Charged twice","body":"Refund $49"}'
+curl localhost:8000/api/analytics/shadow                 # what it would have escalated, and why
 ```
 
 ## Deployment
@@ -106,9 +119,12 @@ For shared deployments, set the opt-in protections from `.env.example`:
 logs). Backups: `python -m scripts.backup --retention 14`.
 
 Prefer a real database? `docker compose --profile postgres up` +
-`AIOPS_STORAGE=postgres` runs the identical API on Postgres/JSONB with a
-pgvector-ready schema (`python -m scripts.migrate_to_postgres --replace
---verify` moves your JSON data over).
+`AIOPS_STORAGE=postgres` runs the identical API on Postgres/JSONB, and live
+mode puts retrieval in pgvector (`python -m scripts.migrate_to_postgres
+--replace --verify --embeddings` moves the data and embeds the corpus once).
+`GET /ready` reports which retriever is actually serving — `tfidf`,
+`embeddings` or `pgvector` — because silence there is how a deployment ends
+up on keyword search for a quarter.
 
 ### The learning loop (v1.3.0)
 
@@ -149,6 +165,31 @@ The questions an operator asks at 2am, answered in code:
 - **Windows launcher** — `scripts\launch_aiops.cmd` + Desktop shortcut;
   port 8200, single-instance, logs to `data\launcher.log`.
 
+### Evidence, not assertions (v1.6.0)
+
+- **Signed decision receipts** — every decision produces one artifact:
+  disposition, risk and its reason, the gate thresholds in force, proposed
+  actions, quality verdict, retrieved documents and cost, signed with
+  Ed25519 (RFC 8032, pure Python). Receipts chain by digest, and
+  `python -m scripts.verify_receipt` checks a file offline with no server and
+  no shared secret. `GET /api/runs/<id>/receipt.json`, one click in the
+  dashboard.
+- **Shadow mode** — `AIOPS_SHADOW=1` scores live traffic through the same
+  intake, retrieval and risk gates and executes nothing: no draft, no refund,
+  no review, no run recorded. `/api/analytics/shadow` reports how many
+  tickets it would have escalated and the triggers behind each one.
+- **Two-sided handoff labour** — the cost comparison now bills the human
+  minutes on both sides: our measured escalations *and* the vendor's
+  unresolved tickets. A cheap meter no longer wins by hiding its queue, and
+  when a human costs more than the per-outcome price the crossover turns
+  into a floor rather than a ceiling.
+- **Artifact provenance** — the committed buyer one-pager ships a sidecar
+  with its inputs, ledger excerpt and digest; `--verify` fails CI if the
+  document drifts from the renderer or was edited by hand.
+- **pgvector retrieval** — embeddings live in the database when there is one,
+  in memory when there isn't, and TF-IDF when there is no key at all. A
+  provider outage degrades retrieval instead of failing the ticket.
+
 ### Storage choice & tighter scope (v1.5.0)
 
 - **Postgres backend, same interface** — `AIOPS_STORAGE=postgres` puts every
@@ -177,7 +218,7 @@ The questions an operator asks at 2am, answered in code:
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Day-2: config, storage, troubleshooting, backup |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Every collection: writer, shape, retention cap |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Decision log: context → decision → consequence |
-| [docs/TESTING.md](docs/TESTING.md) | What the 227 tests pin, fixtures, CI gates |
+| [docs/TESTING.md](docs/TESTING.md) | What the 350 tests pin, fixtures, CI gates |
 | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | Dashboard design system: tokens, bright/dark themes, components, accessibility rules |
 | [marketing/cost-one-pager.html](marketing/cost-one-pager.html) | Generated buyer one-pager: market list prices vs measured cost, with the crossover rate and where we lose |
 | [docs/COMPETITIVE_ANALYSIS.md](docs/COMPETITIVE_ANALYSIS.md) | Market positioning vs Intercom Fin, Zendesk AI, Sierra, Langfuse, n8n — and where we lose |
@@ -194,5 +235,7 @@ The questions an operator asks at 2am, answered in code:
 - [ ] n8n outbound poller executing the outbox against real vendor APIs
 - [x] Market cost comparison — published list prices vs measured cost per decision
 - [x] Shareable, generated buyer one-pager for that comparison
-- [ ] pgvector retrieval cutover behind `AIOPS_RETRIEVAL` (one-file extension point)
-- [ ] Signed decision receipts — one verifiable artifact per decision for auditors
+- [x] pgvector retrieval behind one interface, with TF-IDF as the fallback
+- [x] Signed decision receipts — one verifiable artifact per decision
+- [x] Shadow mode — score live traffic, execute nothing
+- [ ] Receipt key rotation with a published key history (old receipts stay verifiable)
