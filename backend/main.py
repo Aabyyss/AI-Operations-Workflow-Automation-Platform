@@ -893,6 +893,10 @@ def _ready_body() -> dict:
         checks["storage_writable"] = False
 
     checks["knowledge_chunks"] = len(retriever.index.docs)
+    # Which retriever is serving: tfidf (zero config), embeddings (in-process)
+    # or pgvector (shared, persistent). Silence here is how a deployment ends
+    # up quietly on TF-IDF while its operators believe otherwise.
+    checks["retrieval_backend"] = retriever.backend()
 
     ok = checks["storage_writable"] and checks["knowledge_chunks"] > 0
     return {"status": "ready" if ok else "not_ready",

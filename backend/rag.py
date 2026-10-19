@@ -1,8 +1,15 @@
 """RAG layer — ingestion, chunking, retrieval.
 
-Retrieval runs on a dependency-free TF-IDF + cosine similarity index so the
-demo works offline, with a drop-in OpenAI-embeddings path for live mode.
-Same interface either way: retrieve(query) -> list[RetrievedChunk].
+Retrieval runs on a dependency-free TF-IDF + cosine index so the demo, the
+PI tests and CI work with no key and no database. In live mode the same
+`retrieve(query) -> list[RetrievedChunk]` call is served by embeddings
+instead — in this process, or from pgvector when a Postgres backend is
+configured (backend/vectors.py) — and falls back to TF-IDF if the provider
+or the database is unavailable.
+
+TF-IDF is always fitted, even when embeddings are used: it is the fallback
+that keeps a live deployment answering tickets during an API outage, and it
+costs milliseconds.
 """
 from __future__ import annotations
 
@@ -13,6 +20,7 @@ from pathlib import Path
 
 from . import config
 from .models import RetrievedChunk
+from .vectors import build_vector_index, embed_texts
 
 WORD_RE = re.compile(r"[a-z0-9']+")
 
@@ -75,47 +83,18 @@ class TfidfIndex:
         return [(i, round(s, 4)) for i, s in ranked if s > 0]
 
 
-class LiveIndex(TfidfIndex):
-    """Same retrieval contract, but scoring via OpenAI embeddings when configured."""
-
-    def fit(self, docs: list[dict]) -> None:  # noqa: D102
-        super().fit(docs)
-        if config.is_live():
-            try:
-                from openai import OpenAI
-                client = OpenAI(api_key=config.OPENAI_API_KEY, base_url=config.OPENAI_BASE_URL)
-                resp = client.embeddings.create(
-                    model=config.EMBED_MODEL,
-                    input=[d["text"] for d in docs],
-                )
-                self.embeddings = [e.embedding for e in resp.data]
-            except Exception:
-                self.embeddings = []
-
-    def search(self, query: str, k: int = 4) -> list[tuple[int, float]]:  # noqa: D102
-        if config.is_live() and getattr(self, "embeddings", None):
-            try:
-                from openai import OpenAI
-                client = OpenAI(api_key=config.OPENAI_API_KEY, base_url=config.OPENAI_BASE_URL)
-                q = client.embeddings.create(model=config.EMBED_MODEL, input=[query]).data[0].embedding
-                sims = []
-                for vec in self.embeddings:
-                    dot = sum(a * b for a, b in zip(q, vec))
-                    nq = math.sqrt(sum(a * a for a in q)) or 1.0
-                    nv = math.sqrt(sum(b * b for b in vec)) or 1.0
-                    sims.append(dot / (nq * nv))
-                ranked = sorted(enumerate(sims), key=lambda x: -x[1])[:k]
-                return [(i, round(s, 4)) for i, s in ranked if s > 0]
-            except Exception:
-                pass
-        return super().search(query, k)
-
-
 class Retriever:
-    """Loads knowledge_base/*.md, chunks, indexes, retrieves. Singleton."""
+    """Loads knowledge_base/*.md, chunks, indexes, retrieves. Singleton.
+
+    `index` is always the TF-IDF fallback; `vectors` is the embedding index
+    when one could be built (memory or pgvector). Retrieval prefers vectors
+    and degrades rather than failing: an embeddings outage must not stop a
+    support ticket from being answered.
+    """
 
     def __init__(self) -> None:
-        self.index = LiveIndex()
+        self.index = TfidfIndex()
+        self.vectors = None
         self.reload()
 
     def reload(self) -> int:
@@ -124,9 +103,30 @@ class Retriever:
             for path in sorted(config.KNOWLEDGE_DIR.glob("*.md")):
                 docs.extend(chunk_markdown(path))
         self.index.fit(docs)
+        self.vectors = None
+        if config.is_live():
+            try:
+                self.vectors = build_vector_index(docs)
+            except Exception:
+                # No provider, no driver, no pgvector extension: TF-IDF keeps
+                # working. This is the zero-config path, not an incident.
+                self.vectors = None
         return len(docs)
 
+    def backend(self) -> str:
+        """Which retriever is actually serving — for health and docs."""
+        if self.vectors is None:
+            return "tfidf"
+        return "pgvector" if type(self.vectors).__name__ == "PgVectorIndex" else "embeddings"
+
     def retrieve(self, query: str, k: int = 4) -> list[RetrievedChunk]:
+        if self.vectors is not None:
+            try:
+                hits = self.vectors.search(embed_texts([query])[0], k=k)
+                if hits:
+                    return hits
+            except Exception:
+                pass  # fall through to TF-IDF rather than fail the ticket
         out: list[RetrievedChunk] = []
         for i, score in self.index.search(query, k=k):
             d = self.index.docs[i]
