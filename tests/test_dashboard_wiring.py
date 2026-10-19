@@ -98,6 +98,17 @@ def test_the_handoff_switch_says_both_sides():
     assert "Price the human minutes our escalations use" not in HTML
 
 
+def test_every_signed_run_offers_its_receipt():
+    """A receipt nobody can find is not an artifact anyone can check."""
+    body = _function("renderRuns")
+    assert "r.receipt_id" in body
+    assert "/receipt.json" in body
+    assert "download" in body
+    # A run without one says so, instead of quietly offering nothing.
+    assert "no receipt" in body
+    assert "receipt_error" in body
+
+
 def test_disposition_vocabulary_is_defined_once():
     """Two maps drift; one map cannot. Both renderers share the pill helper."""
     assert HTML.count("const DISPOSITION_PILL") == 1

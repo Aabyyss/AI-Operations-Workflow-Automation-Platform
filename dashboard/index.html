@@ -452,8 +452,9 @@
      page. `filter:brightness(1.1)` used to be the only hover state — it
      brightened the label along with the background and read as a rendering
      glitch, so each variant names its own hover colour instead. */
-  button{display:inline-flex; align-items:center; justify-content:center;
+  button, a.ghost{display:inline-flex; align-items:center; justify-content:center;
          gap:var(--sp-1); padding:9px 14px; white-space:nowrap;
+         text-decoration:none;
          border:1px solid transparent; border-radius:var(--r-sm);
          background:var(--accent); color:var(--on-accent);
          font:600 var(--fs-sm)/1 var(--font); cursor:pointer;
@@ -466,9 +467,12 @@
   button:hover{background:var(--accent-hover)}
   button:active{transform:translateY(1px); box-shadow:none}
   button:disabled{opacity:.55; cursor:not-allowed; transform:none}
-  button.ghost{background:var(--surface); border-color:var(--border);
+  /* Downloads are links, not buttons — same shape so a row of actions reads
+     as one control group instead of a button next to a stray hyperlink. */
+  button.ghost, a.ghost{background:var(--surface); border-color:var(--border);
                color:var(--text); box-shadow:none}
-  button.ghost:hover{background:var(--surface-3); border-color:var(--border-2)}
+  button.ghost:hover, a.ghost:hover{background:var(--surface-3);
+                                    border-color:var(--border-2)}
   button.approve{background:var(--good); color:var(--on-good)}
   button.approve:hover{background:var(--good-hover)}
   button.reject{background:transparent; border-color:var(--bad); color:var(--bad);
@@ -1481,6 +1485,10 @@ function renderRuns(runs, tickets) {
       <button class="ghost btn-sm" title="Mark this run as wrong and say why" aria-label="Mark run ${esc(id)} as wrong"
               onclick="giveFeedback('${id}','down')">👎</button>
       <button class="ghost btn-sm" onclick="replayRun('${id}')">Replay</button>
+      ${r.receipt_id
+        ? `<a class="ghost btn-sm" href="/api/runs/${esc(id)}/receipt.json" download
+              title="Signed decision receipt ${esc(r.receipt_id)} — verify it offline with python -m scripts.verify_receipt">Receipt</a>`
+        : `<span class="muted" title="${esc(r.receipt_error || "this run predates signed receipts")}">no receipt</span>`}
       </span>
     </div>`;
   }).join("");
