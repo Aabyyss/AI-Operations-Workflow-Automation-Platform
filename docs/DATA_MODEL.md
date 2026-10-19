@@ -25,6 +25,8 @@ default: the demo, tests and CI never need a database.
 | `workflows.json` | `POST /api/workflows/design` | design record: `process_id`, `node_count` (full n8n JSON only via download endpoint) | List stays small; the importable graph is generated on demand |
 | `feedback.json` | `POST /api/runs/{id}/feedback` | `Feedback`: `run_id`, `rating` (`up/down`), `correction?`, `reviewer` | Satisfaction analytics + recall proxy for the quality gate |
 | `cycle_times.json` | `POST /api/analytics/ab/records` | `{id, ticket_id?, label?, cycle_seconds, cohort:"manual"}` | The manual cohort of the A/B cycle-time report |
+| `receipts.json` | `receipts.issue` after every run | `{payload, payload_sha256, signature{alg, key_id, public_key, signature}}`; the payload holds `receipt_id`, `run_id`, `disposition`, `decision`, `quality?`, `response{sha256, chars, grounded_in}?`, `retrieval[]`, `cost_usd`, `actions_taken[]` (addresses redacted), `mode`, `gates`, `chain{index, prev}` | Signed Ed25519 artifact — treat it as evidence, not cache. The reply text is never stored, only its digest. Chained by `payload_sha256`, so order matters and deletion is visible |
+| `shadow.json` | `shadow.score` / shadow-mode runs | `{id, created_at, result_id?, ticket{id, category, priority, requested_refund_usd, has_customer_email}, would_escalate, would_auto_resolve, risk_score, confidence, reason, triggers[], proposed_actions[], retrieval[], gates, mode, cost_usd}` | What the gates would have done. Never written to `runs`, so containment/escalation rates are untouched; contains no ticket body or address |
 
 ## Retention policy
 
@@ -39,9 +41,13 @@ than N days and caps the rest:
 | usage | 90d | 20,000 |
 | deliveries | 30d | 5,000 |
 | feedback | 180d | 5,000 |
+| shadow | 30d | 20,000 |
 
-Unpruned collections (audit, outbox, reviews, cycle_times) are either
-append-ledgers you should keep (audit) or naturally bounded. Pruning
+Unpruned collections (audit, outbox, reviews, cycle_times, receipts) are
+either append-ledgers you should keep (audit) or naturally bounded.
+**`receipts` is exempt on purpose:** a signed receipt is an artifact someone
+else holds a copy of, and pruning this deployment's copy breaks the chain an
+auditor verifies against. Export it or leave it. Pruning
 never orphans a run: tickets referenced by surviving runs are kept so
 replay still works.
 
