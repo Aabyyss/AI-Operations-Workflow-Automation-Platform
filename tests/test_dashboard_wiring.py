@@ -70,6 +70,23 @@ def test_feedback_and_replay_use_the_run_id():
     assert "subjectOf.get(r.ticket_id)" in body
 
 
+def test_cost_table_shows_the_figure_its_verdict_was_computed_on():
+    """With labour billed, the API's verdict uses the fully loaded number.
+    A table that shows only the bill then argues with its own verdict."""
+    body = _function("renderCostCompare")
+    assert 'r.comparison_basis === "fully_loaded"' in body
+    assert "p.fully_loaded_monthly_usd" in body
+    assert "p.fully_loaded_annual_usd" in body
+    assert "p.fully_loaded_cost_per_ticket_usd" in body
+    # The basis is stated in prose, not left for the reader to infer.
+    assert "handoff labour billed on both sides" in body
+
+
+def test_the_handoff_switch_says_both_sides():
+    assert "Bill handoff labour on both sides" in HTML
+    assert "Price the human minutes our escalations use" not in HTML
+
+
 def test_disposition_vocabulary_is_defined_once():
     """Two maps drift; one map cannot. Both renderers share the pill helper."""
     assert HTML.count("const DISPOSITION_PILL") == 1

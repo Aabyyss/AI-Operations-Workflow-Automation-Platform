@@ -329,6 +329,10 @@
      only what came in is a list of tickets, not of runs. */
   .run-meta{flex:none; font:var(--fs-2xs)/1.4 var(--font-mono);
             color:var(--text-subtle); font-variant-numeric:tabular-nums}
+  /* The second figure under a cost cell: what the meter bills is the first
+     number, what the meter leaves on your queue is the second. */
+  .cell-note{font-size:var(--fs-2xs); font-variant-numeric:tabular-nums;
+             color:var(--text-subtle)}
   .run-actions{display:flex; gap:var(--sp-1); flex:none; margin-left:auto}
 
   /* An empty panel is a moment of truth: say what it means, not nothing. */
@@ -772,14 +776,14 @@ Manager review of hard cases | 3.0 | 0 | 1 | 0 | 0</textarea>
       <label class="switch">
         <input id="cc_human" type="checkbox">
         <span class="track" aria-hidden="true"></span>
-        <span>Price the human minutes our escalations use</span>
+        <span>Bill handoff labour on both sides</span>
       </label>
       <div class="field" style="width:104px">
-        <label for="cc_human_rate">$/hour</label>
+        <label for="cc_human_rate">$/hour, both sides</label>
         <input id="cc_human_rate" type="number" min="0" value="25">
       </div>
       <div class="field" style="width:132px">
-        <label for="cc_human_mins">min / escalation</label>
+        <label for="cc_human_mins">min / handoff</label>
         <input id="cc_human_mins" type="number" min="0" value="6">
       </div>
       <button onclick="runCostCompare()">Compare</button>
@@ -1210,15 +1214,26 @@ function renderCostCompare(r) {
       : (p.verdict === "more_expensive"
           ? '<span class="pill ok">pipeline is cheaper</span>'
           : '<span class="pill bad">plan is cheaper</span>');
+    // When labour is billed, the API's verdict is computed on the loaded
+    // figure — so the cell has to show it, or the table argues with itself.
+    const loaded = r.comparison_basis === "fully_loaded" && p.fully_loaded_monthly_usd !== null;
+    const monthCell = quoted ? "—"
+      : `${moneyShort(p.monthly_usd)}${loaded
+          ? `<div class="cell-note">${moneyShort(p.fully_loaded_monthly_usd)} loaded</div>` : ""}`;
+    const yearCell = quoted ? "—"
+      : `${moneyShort(p.annual_usd)}${loaded
+          ? `<div class="cell-note">${moneyShort(p.fully_loaded_annual_usd)} loaded</div>` : ""}`;
+    const ticketCell = quoted ? "—"
+      : usd(loaded ? p.fully_loaded_cost_per_ticket_usd : p.cost_per_ticket_usd);
     const breakeven = p.breakeven_resolution_rate_pct === null
       ? `<span class="muted" title="${esc(p.breakeven_note)}">n/a</span>`
       : `<b title="${esc(p.breakeven_note)}">${p.breakeven_resolution_rate_pct}%</b>`;
     return `<tr>
       <td><a href="${esc(p.source)}" target="_blank" rel="noopener"
              style="color:inherit" title="${esc(p.note)}">${esc(p.vendor)}</a></td>
-      <td class="num">${quoted ? "—" : moneyShort(p.monthly_usd)}</td>
-      <td class="num">${quoted ? "—" : moneyShort(p.annual_usd)}</td>
-      <td class="num">${quoted ? "—" : usd(p.cost_per_ticket_usd)}</td>
+      <td class="num">${monthCell}</td>
+      <td class="num">${yearCell}</td>
+      <td class="num">${ticketCell}</td>
       <td>${breakeven}</td>
       <td>${verdict}</td>
     </tr>`;
@@ -1238,7 +1253,9 @@ function renderCostCompare(r) {
       From <b>${r.measured_from_decisions}</b> recorded decision(s) ·
       <span class="${basis[1]}">${basis[0]}</span> ·
       <span class="${r.mode === "live" ? "good" : "warn"}">${esc(r.mode)} mode</span>${
-      r.escalations_per_month ? ` · ${r.escalations_per_month}/month touch a human` : ""}
+      r.escalations_per_month ? ` · ${r.escalations_per_month}/month touch a human` : ""}${
+      r.comparison_basis === "fully_loaded"
+        ? ` · handoff labour billed on both sides at $${r.handoff_per_ticket_usd} per human touch` : ""}
     </div>
     <div class="table-scroll">
       <table aria-label="Modelled market plans against this pipeline">
