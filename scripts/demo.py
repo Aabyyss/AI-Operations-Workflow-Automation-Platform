@@ -204,6 +204,52 @@ def learning_loop() -> None:
               f"{len([l for l in m.text.splitlines() if l and not l.startswith('#')])} metric lines")
 
 
+def receipts_and_shadow() -> None:
+    """Two artifacts that exist for someone outside this deployment."""
+    from backend import receipts, shadow
+
+    print("\n" + "=" * 68)
+    print("PROOF - signed receipts and shadow mode")
+    print("=" * 68)
+
+    run = next((r for r in reversed(storage.all("runs")) if r.get("receipt_id")), None)
+    receipt = receipts.receipt_for_run(run["id"]) if run else None
+    if receipt:
+        payload = receipt["payload"]
+        verdict = receipts.verify_receipt(receipt)
+        print(f"Receipt {payload['receipt_id']} for run {run['id']}:")
+        print(f"  disposition={payload['disposition']}  "
+              f"risk={payload['decision']['risk_score']}  "
+              f"chain index={payload['chain']['index']}  "
+              f"gates: auto<= {payload['gates']['auto_execute_max_risk']}")
+        print(f"  sha256={receipt['payload_sha256'][:24]}…  "
+              f"signed by {receipt['signature']['key_id']}")
+        print(f"  verified in-process: {verdict['ok']} - {verdict['reason']}")
+        print(f"  export: curl -o receipt.json {config.API_BASE_URL}/api/runs/{run['id']}/receipt.json")
+        print("  verify offline (no server, no key): python -m scripts.verify_receipt receipt.json")
+    else:
+        print("No signed receipt found in this run.")
+
+    scored = [
+        _ticket("Refund for annual plan",
+                "I want a $1200 refund for my annual plan, and to cancel it.",
+                "marcus@northwind.example"),
+        _ticket("Pricing question",
+                "How much does the Growth plan cost per user?",
+                "hello@newstartup.example"),
+    ]
+    for ticket in scored:
+        shadow.score(ticket)
+    report = shadow.report()
+    print(f"\nShadow mode scored {report['count']} ticket(s) through the real gates:")
+    print(f"  would have escalated {report['would_have_escalated']} "
+          f"({report['escalation_rate_pct']}%)  "
+          f"would have auto-resolved {report['would_have_auto_resolved']}")
+    for t in report["top_triggers"][:3]:
+        print(f"    - {t['trigger']} (x{t['tickets']})")
+    print(f"  {report['what_it_does_not_do']}")
+
+
 def summary() -> None:
     print("\n" + "=" * 68)
     print("MONITORING - is it actually working? (/api/analytics/summary)")
@@ -251,5 +297,5 @@ if __name__ == "__main__":
     side_b()
     approve_one()
     learning_loop()
-    summary()
+    receipts_and_shadow()
     summary()
