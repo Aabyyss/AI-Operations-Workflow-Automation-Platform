@@ -9,3 +9,7 @@ data/
 *.log
 .DS_Store
 node_modules/
+
+# scratch output from local capture/verification runs (never committed)
+tmp_*/
+tmp_*.js
