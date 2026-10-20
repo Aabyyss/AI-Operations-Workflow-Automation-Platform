@@ -1,0 +1,927 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decision receipt — offline verifier</title>
+<style>
+/* ------------------------------------------------------------------
+   A viewer for one artifact: a signed decision receipt. It verifies the
+   file *in this page* — SHA-256, Ed25519 and the canonical JSON form
+   are all implemented here, in JavaScript, from the file itself. No
+   server, no network, no dependencies: open it from disk (file://),
+   drop a receipt on it, read the verdict.
+
+   The point is the same as backend/receipts.py: the artifact must be
+   checkable by someone who trusts neither this machine nor this
+   organisation. So the honest parts are the ugly parts — the banner
+   says exactly what was proven, and the footer says what was not.
+   ------------------------------------------------------------------ */
+:root{
+  color-scheme: light dark;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  --r-sm:6px; --r-md:10px;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",monospace;
+  --fs-sm:.85rem; --fs-md:1rem; --fs-lg:1.3rem; --fs-xl:1.7rem;
+  --bg:#f4f2ee; --surface:#ffffff; --surface-2:#efece6;
+  --text:#22242a; --muted:#5b6068; --border:#dcd8d0;
+  --ok:#1c7a4a; --ok-bg:#e2f4ea; --bad:#a3231f; --bad-bg:#fbe6e5;
+  --warn:#8a5a06; --warn-bg:#f8edd8; --info:#20508f; --info-bg:#e3ecf8;
+  --accent:#20508f;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#14161b; --surface:#1c1f26; --surface-2:#232730;
+    --text:#e8e6e1; --muted:#a0a4ac; --border:#31353d;
+    --ok:#5fc98f; --ok-bg:#12301f; --bad:#f2837e; --bad-bg:#38191a;
+    --warn:#e0b45c; --warn-bg:#332710; --info:#84aee8; --info-bg:#16233a;
+    --accent:#84aee8;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0; background:var(--bg); color:var(--text);
+     font:var(--fs-md)/1.5 var(--font)}
+main{max-width:860px; margin:0 auto; padding:var(--sp-5) var(--sp-4) var(--sp-6)}
+header{border-bottom:1px solid var(--border); padding:var(--sp-5) 0 var(--sp-4)}
+h1{margin:0; font-size:var(--fs-xl)}
+h2{margin:0 0 var(--sp-3); font-size:var(--fs-lg)}
+p.sub{margin:var(--sp-2) 0 0; color:var(--muted)}
+.card{background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--r-md); padding:var(--sp-4); margin:var(--sp-4) 0}
+.zone{border:2px dashed var(--border); border-radius:var(--r-md);
+      padding:var(--sp-5); text-align:center; color:var(--muted);
+      background:var(--surface-2); cursor:pointer;
+      transition:border-color .15s, background .15s}
+.zone.over{border-color:var(--accent); background:var(--info-bg)}
+.zone strong{color:var(--text)}
+.zone-row{display:grid; gap:var(--sp-3); grid-template-columns:1fr 1fr}
+@media (max-width:640px){.zone-row{grid-template-columns:1fr}}
+button{font:600 var(--fs-sm)/1 var(--font); padding:9px 14px;
+       border:1px solid var(--border); border-radius:var(--r-sm);
+       background:var(--surface-2); color:var(--text); cursor:pointer}
+button:hover{background:var(--border)}
+.banner{display:flex; gap:var(--sp-3); align-items:center;
+        border-radius:var(--r-md); padding:var(--sp-4);
+        border:1px solid var(--border); font-size:var(--fs-lg); font-weight:700}
+.banner.ok{background:var(--ok-bg); color:var(--ok); border-color:var(--ok)}
+.banner.bad{background:var(--bad-bg); color:var(--bad); border-color:var(--bad)}
+.banner .glyph{font-size:1.6rem}
+.banner .why{font-size:var(--fs-sm); font-weight:400; color:var(--text);
+             display:block; margin-top:var(--sp-1)}
+table{width:100%; border-collapse:collapse; font-size:var(--fs-sm)}
+th,td{text-align:left; padding:var(--sp-2) var(--sp-3);
+      border-bottom:1px solid var(--border); vertical-align:top}
+th{color:var(--muted); font-weight:600; width:34%}
+td.num{text-align:right; font-family:var(--mono)}
+dl.checks{margin:0; font-size:var(--fs-sm)}
+dl.checks div{display:flex; gap:var(--sp-3); padding:var(--sp-2) 0;
+              border-bottom:1px solid var(--border)}
+dl.checks dt{width:200px; color:var(--muted); flex:none}
+dl.checks dd{margin:0; font-family:var(--mono); word-break:break-all}
+.pill{display:inline-block; padding:1px 8px; border-radius:99px;
+      font:600 var(--fs-sm)/1.6 var(--font)}
+.pill.ok{background:var(--ok-bg); color:var(--ok)}
+.pill.bad{background:var(--bad-bg); color:var(--bad)}
+.pill.warn{background:var(--warn-bg); color:var(--warn)}
+.pill.info{background:var(--info-bg); color:var(--info)}
+.hash{font-family:var(--mono); font-size:var(--fs-sm); word-break:break-all}
+ul.chain{list-style:none; margin:0; padding:0; font-size:var(--fs-sm)}
+ul.chain li{padding:var(--sp-2) 0; border-bottom:1px solid var(--border);
+            display:flex; gap:var(--sp-3); align-items:baseline; flex-wrap:wrap}
+footer{color:var(--muted); font-size:var(--fs-sm);
+       border-top:1px solid var(--border); padding-top:var(--sp-4);
+       margin-top:var(--sp-5)}
+footer strong{color:var(--text)}
+footer ul{padding-left:1.2em; margin:var(--sp-2) 0}
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Decision receipt</h1>
+  <p class="sub">An offline verifier. Everything on this page runs from the
+     file you drop — no server, no network, no shared secret. If this page
+     ever made a network request, it would not be evidence of anything.</p>
+</header>
+
+<section class="card" id="intro">
+  <div class="zone-row">
+    <label class="zone" id="zone-receipt" for="file-receipt">
+      <strong>Drop a receipt here</strong><br>
+      <code>receipt-*.json</code>, or a bundle <code>{"receipts":[…]}</code><br>
+      <span id="receipt-names"></span>
+      <input type="file" id="file-receipt" accept=".json,application/json" hidden multiple>
+    </label>
+    <label class="zone" id="zone-keys" for="file-keys">
+      <strong>Optional: the published key history</strong><br>
+      <code>receipt_keys.json</code> / <code>GET /api/receipts/key-history</code><br>
+      <span id="keys-names"></span>
+      <input type="file" id="file-keys" accept=".json,application/json" hidden>
+    </label>
+  </div>
+  <p class="sub" style="margin-top:var(--sp-3)">
+    Without a key history the page can prove the file was not altered and
+    which key signed it — but not that the key is one this deployment ever
+    published. Drop the history to close that gap.</p>
+</section>
+
+<section class="card" id="verdict" hidden aria-live="polite">
+  <div class="banner" id="banner"></div>
+  <h2 style="margin-top:var(--sp-4)">Checks</h2>
+  <dl class="checks" id="checks"></dl>
+</section>
+
+<section class="card" id="keys-panel" hidden>
+  <h2>Key history <span class="pill info" id="keys-pin"></span></h2>
+  <ul class="chain" id="keys-list"></ul>
+</section>
+
+<section class="card" id="chain-panel" hidden>
+  <h2>Chain</h2>
+  <ul class="chain" id="chain-list"></ul>
+</section>
+
+<section class="card" id="decision" hidden>
+  <h2>The decision</h2>
+  <table id="decision-table"></table>
+</section>
+
+<footer>
+  <p><strong>What this page proves</strong></p>
+  <ul>
+    <li>The payload is exactly what was signed (sha256 of its canonical form).</li>
+    <li>The Ed25519 signature is valid for the public key in the receipt.</li>
+    <li>With a key history dropped: that key was published by this
+        deployment — and whether it is still the active one.</li>
+    <li>With a bundle dropped: each receipt links to the digest of the one
+        before it, so a deletion or reorder is visible.</li>
+  </ul>
+  <p><strong>What it cannot prove</strong>: that the key belongs to the
+     organisation you think it does. That requires pinning the public key
+     through a channel you already trust. It also cannot prove the inputs
+     were honest — a receipt attests to what was decided and why, not to
+     whether the customer told the truth.</p>
+  <p>Independent implementation: <code>backend/ed25519.py</code> (Python) and
+     the script in this file (JavaScript) are cross-checked by
+     <code>tests/test_receipt_viewer.py</code> against the same receipts.</p>
+</footer>
+</main>
+
+<script>
+"use strict";
+/* ====================================================================
+   ReceiptViewer — the whole verifier, dependency-free.
+   Exposed for tests (node) via module.exports; in a browser it wires
+   itself to the page below.
+   ==================================================================== */
+const ReceiptViewer = (function () {
+
+const RECEIPT_VERSION = 1;
+const SIGNATURE_ALG = "ed25519";
+
+// -------------------------------------------------------------- bytes
+const te = new TextEncoder();
+const utf8 = (s) => te.encode(s);
+function hex(bytes) {
+  let out = "";
+  for (const b of bytes) out += b.toString(16).padStart(2, "0");
+  return out;
+}
+function fromHex(s) {
+  if (typeof s !== "string" || s.length % 2 || /[^0-9a-fA-F]/.test(s))
+    throw new Error("not hex");
+  const out = new Uint8Array(s.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(s.substr(i * 2, 2), 16);
+  return out;
+}
+function concat(...parts) {
+  const total = parts.reduce((n, p) => n + p.length, 0);
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const p of parts) { out.set(p, off); off += p.length; }
+  return out;
+}
+function bytesToLE(bytes) {          // little-endian bigint
+  let v = 0n;
+  for (let i = bytes.length - 1; i >= 0; i--) v = (v << 8n) | BigInt(bytes[i]);
+  return v;
+}
+function leToBytes(v, len) {
+  const out = new Uint8Array(len);
+  for (let i = 0; i < len; i++) { out[i] = Number(v & 255n); v >>= 8n; }
+  return out;
+}
+function beToBytes(v, len) {
+  const out = new Uint8Array(len);
+  for (let i = len - 1; i >= 0; i--) { out[i] = Number(v & 255n); v >>= 8n; }
+  return out;
+}
+
+// ---------------------------------------------------------------- SHA-256
+// Constants: first 32 bits of the fractional parts of the cube roots (K)
+// and square roots (H) of the first 64/8 primes — the FIPS 180-4 values,
+// generated from their definition rather than transcribed.
+const SHA256_K = [
+0x00428a2f98, 0x0071374491, 0x00b5c0fbcf, 0x00e9b5dba5,
+0x003956c25b, 0x0059f111f1, 0x00923f82a4, 0x00ab1c5ed5,
+0x00d807aa98, 0x0012835b01, 0x00243185be, 0x00550c7dc3,
+0x0072be5d74, 0x0080deb1fe, 0x009bdc06a7, 0x00c19bf174,
+0x00e49b69c1, 0x00efbe4786, 0x000fc19dc6, 0x00240ca1cc,
+0x002de92c6f, 0x004a7484aa, 0x005cb0a9dc, 0x0076f988da,
+0x00983e5152, 0x00a831c66d, 0x00b00327c8, 0x00bf597fc7,
+0x00c6e00bf3, 0x00d5a79147, 0x0006ca6351, 0x0014292967,
+0x0027b70a85, 0x002e1b2138, 0x004d2c6dfc, 0x0053380d13,
+0x00650a7354, 0x00766a0abb, 0x0081c2c92e, 0x0092722c85,
+0x00a2bfe8a1, 0x00a81a664b, 0x00c24b8b70, 0x00c76c51a3,
+0x00d192e819, 0x00d6990624, 0x00f40e3585, 0x00106aa070,
+0x0019a4c116, 0x001e376c08, 0x002748774c, 0x0034b0bcb5,
+0x00391c0cb3, 0x004ed8aa4a, 0x005b9cca4f, 0x00682e6ff3,
+0x00748f82ee, 0x0078a5636f, 0x0084c87814, 0x008cc70208,
+0x0090befffa, 0x00a4506ceb, 0x00bef9a3f7, 0x00c67178f2
+];
+const SHA256_H = [
+0x006a09e667, 0x00bb67ae85, 0x003c6ef372, 0x00a54ff53a,
+0x00510e527f, 0x009b05688c, 0x001f83d9ab, 0x005be0cd19
+];
+function sha256(bytes) {
+  const len = bytes.length;
+  const padded = Math.ceil((len + 9) / 64) * 64;
+  const buf = new Uint8Array(padded);
+  buf.set(bytes);
+  buf[len] = 0x80;
+  const dv = new DataView(buf.buffer);
+  const bits = len * 8;                       // payloads here are small
+  dv.setUint32(padded - 8, Math.floor(bits / 4294967296));
+  dv.setUint32(padded - 4, bits >>> 0);
+  const h = SHA256_H.slice();
+  const w = new Uint32Array(64);
+  const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+  for (let off = 0; off < padded; off += 64) {
+    for (let i = 0; i < 16; i++) w[i] = dv.getUint32(off + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const a15 = w[i - 15], a2 = w[i - 2];
+      const s0 = rotr(a15, 7) ^ rotr(a15, 18) ^ (a15 >>> 3);
+      const s1 = rotr(a2, 17) ^ rotr(a2, 19) ^ (a2 >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, hh] = h;
+    for (let i = 0; i < 64; i++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (hh + S1 + ch + SHA256_K[i] + w[i]) >>> 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) >>> 0;
+      hh = g; g = f; f = e; e = (d + t1) >>> 0;
+      d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+    }
+    const add = [a, b, c, d, e, f, g, hh];
+    for (let i = 0; i < 8; i++) h[i] = (h[i] + add[i]) >>> 0;
+  }
+  return h.map((x) => x.toString(16).padStart(8, "0")).join("");
+}
+const sha256Hex = (bytes) => sha256(bytes);
+
+// ---------------------------------------------------------------- SHA-512
+// Ed25519 needs SHA-512 (RFC 8032), so the viewer carries it too: first 64
+// bits of the fractional cube roots (K) and square roots (H) of the primes.
+const M64 = (1n << 64n) - 1n;
+const SHA512_K = [
+0x428a2f98d728ae22n, 0x7137449123ef65cdn, 0xb5c0fbcfec4d3b2fn, 0xe9b5dba58189dbbcn,
+0x3956c25bf348b538n, 0x59f111f1b605d019n, 0x923f82a4af194f9bn, 0xab1c5ed5da6d8118n,
+0xd807aa98a3030242n, 0x12835b0145706fben, 0x243185be4ee4b28cn, 0x550c7dc3d5ffb4e2n,
+0x72be5d74f27b896fn, 0x80deb1fe3b1696b1n, 0x9bdc06a725c71235n, 0xc19bf174cf692694n,
+0xe49b69c19ef14ad2n, 0xefbe4786384f25e3n, 0x0fc19dc68b8cd5b5n, 0x240ca1cc77ac9c65n,
+0x2de92c6f592b0275n, 0x4a7484aa6ea6e483n, 0x5cb0a9dcbd41fbd4n, 0x76f988da831153b5n,
+0x983e5152ee66dfabn, 0xa831c66d2db43210n, 0xb00327c898fb213fn, 0xbf597fc7beef0ee4n,
+0xc6e00bf33da88fc2n, 0xd5a79147930aa725n, 0x06ca6351e003826fn, 0x142929670a0e6e70n,
+0x27b70a8546d22ffcn, 0x2e1b21385c26c926n, 0x4d2c6dfc5ac42aedn, 0x53380d139d95b3dfn,
+0x650a73548baf63den, 0x766a0abb3c77b2a8n, 0x81c2c92e47edaee6n, 0x92722c851482353bn,
+0xa2bfe8a14cf10364n, 0xa81a664bbc423001n, 0xc24b8b70d0f89791n, 0xc76c51a30654be30n,
+0xd192e819d6ef5218n, 0xd69906245565a910n, 0xf40e35855771202an, 0x106aa07032bbd1b8n,
+0x19a4c116b8d2d0c8n, 0x1e376c085141ab53n, 0x2748774cdf8eeb99n, 0x34b0bcb5e19b48a8n,
+0x391c0cb3c5c95a63n, 0x4ed8aa4ae3418acbn, 0x5b9cca4f7763e373n, 0x682e6ff3d6b2b8a3n,
+0x748f82ee5defb2fcn, 0x78a5636f43172f60n, 0x84c87814a1f0ab72n, 0x8cc702081a6439ecn,
+0x90befffa23631e28n, 0xa4506cebde82bde9n, 0xbef9a3f7b2c67915n, 0xc67178f2e372532bn,
+0xca273eceea26619cn, 0xd186b8c721c0c207n, 0xeada7dd6cde0eb1en, 0xf57d4f7fee6ed178n,
+0x06f067aa72176fban, 0x0a637dc5a2c898a6n, 0x113f9804bef90daen, 0x1b710b35131c471bn,
+0x28db77f523047d84n, 0x32caab7b40c72493n, 0x3c9ebe0a15c9bebcn, 0x431d67c49c100d4cn,
+0x4cc5d4becb3e42b6n, 0x597f299cfc657e2an, 0x5fcb6fab3ad6faecn, 0x6c44198c4a475817n
+];
+const SHA512_H = [
+0x6a09e667f3bcc908n, 0xbb67ae8584caa73bn, 0x3c6ef372fe94f82bn, 0xa54ff53a5f1d36f1n,
+0x510e527fade682d1n, 0x9b05688c2b3e6c1fn, 0x1f83d9abfb41bd6bn, 0x5be0cd19137e2179n
+];
+function sha512(bytes) {
+  const len = bytes.length;
+  const padded = Math.ceil((len + 17) / 128) * 128;
+  const buf = new Uint8Array(padded);
+  buf.set(bytes);
+  buf[len] = 0x80;
+  const dv = new DataView(buf.buffer);
+  const bits = BigInt(len) * 8n;              // 128-bit length, big endian
+  dv.setUint32(padded - 16, 0);               // …of which the top 64 bits
+  dv.setUint32(padded - 12, 0);               // are always 0 for our payloads
+  dv.setUint32(padded - 8, Number(bits >> 32n));
+  dv.setUint32(padded - 4, Number(bits & 0xffffffffn));
+  const h = SHA512_H.slice();
+  const w = new Array(80);
+  const rotr = (x, n) => ((x >> BigInt(n)) | (x << BigInt(64 - n))) & M64;
+  for (let off = 0; off < padded; off += 128) {
+    for (let i = 0; i < 16; i++) w[i] = dv.getBigUint64(off + i * 8);
+    for (let i = 16; i < 80; i++) {
+      const a15 = w[i - 15], a2 = w[i - 2];
+      const s0 = rotr(a15, 1) ^ rotr(a15, 8) ^ (a15 >> 7n);
+      const s1 = rotr(a2, 19) ^ rotr(a2, 61) ^ (a2 >> 6n);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) & M64;
+    }
+    let [a, b, c, d, e, f, g, hh] = h;
+    for (let i = 0; i < 80; i++) {
+      const S1 = rotr(e, 14) ^ rotr(e, 18) ^ rotr(e, 41);
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (hh + S1 + ch + SHA512_K[i] + w[i]) & M64;
+      const S0 = rotr(a, 28) ^ rotr(a, 34) ^ rotr(a, 39);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) & M64;
+      hh = g; g = f; f = e; e = (d + t1) & M64;
+      d = c; c = b; b = a; a = (t1 + t2) & M64;
+    }
+    const add = [a, b, c, d, e, f, g, hh];
+    for (let i = 0; i < 8; i++) h[i] = (h[i] + add[i]) & M64;
+  }
+  return concat(...h.map((x) => beToBytes(x, 8)));   // big-endian words
+}
+
+// --------------------------------------------------------------- Ed25519
+// RFC 8032, ported from backend/ed25519.py: same two hardenings (S < L on
+// verification, full on-curve decode of public keys and R).
+const P = (1n << 255n) - 19n;
+const L = (1n << 252n) + 27742317777372353535851937790883648493n;
+const mod = (a, m) => { const r = a % m; return r >= 0n ? r : r + m; };
+function modPow(base, exp, m) {
+  let result = 1n;
+  base = mod(base, m);
+  while (exp > 0n) {
+    if (exp & 1n) result = result * base % m;
+    base = base * base % m;
+    exp >>= 1n;
+  }
+  return result;
+}
+const inv = (x) => modPow(mod(x, P), P - 2n, P);
+const D = mod(-121665n * inv(121666n), P);
+const SQRT_M1 = modPow(2n, (P - 1n) / 4n, P);
+function recoverX(y) {
+  const yy = mod(y * y, P);
+  const xx = mod((yy - 1n) * inv(mod(D * yy + 1n, P)), P);
+  let x = modPow(xx, (P + 3n) / 8n, P);
+  if (mod(x * x - xx, P) !== 0n) x = mod(x * SQRT_M1, P);
+  if ((x & 1n) === 1n) x = P - x;
+  return x;
+}
+const BY = mod(4n * inv(5n), P);
+const BX = recoverX(BY);
+const BASE = [BX, BY, 1n, mod(BX * BY, P)];
+const IDENTITY = [0n, 1n, 1n, 0n];
+function addPts(p1, p2) {
+  const [x1, y1, z1, t1] = p1, [x2, y2, z2, t2] = p2;
+  const a = mod((y1 - x1) * (y2 - x2), P);
+  const b = mod((y1 + x1) * (y2 + x2), P);
+  const c = mod(t1 * 2n * D * t2, P);
+  const dd = mod(z1 * 2n * z2, P);
+  const e = mod(b - a, P), f = mod(dd - c, P),
+        g = mod(dd + c, P), h = mod(b + a, P);
+  return [mod(e * f, P), mod(g * h, P), mod(f * g, P), mod(e * h, P)];
+}
+function mulPoint(point, scalar) {
+  let result = IDENTITY, addend = point;
+  while (scalar > 0n) {
+    if (scalar & 1n) result = addPts(result, addend);
+    addend = addPts(addend, addend);
+    scalar >>= 1n;
+  }
+  return result;
+}
+function encodePoint([x, y, z]) {
+  const zi = inv(z);
+  const xe = mod(x * zi, P), ye = mod(y * zi, P);
+  return leToBytes(ye | ((xe & 1n) << 255n), 32);
+}
+function decodePoint(bytes) {
+  if (bytes.length !== 32) throw new Error("a point is 32 bytes");
+  const v = bytesToLE(bytes);
+  const sign = Number(v >> 255n);
+  const y = v & ((1n << 255n) - 1n);
+  if (y >= P) throw new Error("y is not a field element");
+  let x = recoverX(y);
+  if (Number(x & 1n) !== sign) x = P - x;
+  if (mod(-x * x + y * y - 1n - D * x * x * y * y, P) !== 0n)
+    throw new Error("point is not on the curve");
+  return [x, y, 1n, mod(x * y, P)];
+}
+function expandSeed(seed) {
+  if (seed.length !== 32) throw new Error("seed must be 32 bytes");
+  const digest = sha512(seed);
+  let a = bytesToLE(digest.subarray(0, 32));
+  a &= (1n << 254n) - 8n;
+  a |= 1n << 254n;
+  return { a, prefix: digest.subarray(32) };
+}
+function edPublicKey(seed) {
+  return encodePoint(mulPoint(BASE, expandSeed(seed).a));
+}
+function edSign(seed, message) {
+  const { a, prefix } = expandSeed(seed);
+  const pk = encodePoint(mulPoint(BASE, a));
+  const r = bytesToLE(sha512(concat(prefix, message))) % L;
+  const bigR = encodePoint(mulPoint(BASE, r));
+  const hram = bytesToLE(sha512(concat(bigR, pk, message))) % L;
+  return concat(bigR, leToBytes(mod(r + hram * a, L), 32));
+}
+function edVerify(publicKey, message, signature) {
+  if (publicKey.length !== 32 || signature.length !== 64) return false;
+  let aPoint, rPoint;
+  try { aPoint = decodePoint(publicKey); rPoint = decodePoint(signature.subarray(0, 32)); }
+  catch (e) { return false; }
+  const s = bytesToLE(signature.subarray(32));
+  if (s >= L) return false;                    // malleability guard
+  const hram = bytesToLE(sha512(concat(signature.subarray(0, 32), publicKey, message))) % L;
+  // Content comparison, not ===: encodePoint returns a fresh Uint8Array,
+  // and two Uint8Arrays are never === however identical.
+  return hex(encodePoint(mulPoint(BASE, s))) ===
+         hex(encodePoint(addPts(rPoint, mulPoint(aPoint, hram))));
+}
+
+// ------------------------------------------------------------- canonical
+// One byte string per payload — sorted keys, no whitespace, matching
+// json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+// in Python. Both sides sign and verify through their own copy of this,
+// and tests/test_receipt_viewer.py asserts the two agree byte for byte.
+//
+// The subtle part is numbers. Python distinguishes 500 (an int) from 500.0
+// (a float) and writes them differently — 500 and 500.0 — and the digest
+// was computed over that spelling. JSON.parse throws that distinction away
+// (500.0 parses to the same Number as 500), so this file parses JSON
+// itself and keeps every number's literal form.
+function RawNum(text) { this.text = text; }
+RawNum.prototype.toString = function () { return pyNumber(this.text); };
+RawNum.prototype.valueOf = function () { return Number(this.text); };
+
+function pyRepr(x) {                     // Python's repr() for a float
+  if (!Number.isFinite(x)) throw new Error("NaN/Infinity is not JSON");
+  if (x === 0) return Object.is(x, -0) ? "-0.0" : "0.0";
+  const abs = Math.abs(x);
+  if (abs >= 1e16 || abs < 1e-4) {      // Python switches to scientific here
+    const [mant, exp] = x.toExponential().split("e");
+    const e = parseInt(exp, 10);
+    return `${mant}e${e < 0 ? "-" : "+"}${String(Math.abs(e)).padStart(2, "0")}`;
+  }
+  const s = String(x);
+  return /[.e]/.test(s) ? s : s + ".0";  // integral floats keep their .0
+}
+function pyNumber(literal) {             // the literal as Python would write it
+  if (/^-?(0|[1-9]\d*)$/.test(literal))
+    return BigInt(literal).toString();    // a Python int (arbitrary precision)
+  return pyRepr(Number(literal));         // a Python float
+}
+
+function parseJson(text) {
+  let i = 0;
+  const fail = (msg) => { throw new Error(`invalid JSON: ${msg} at position ${i}`); };
+  const ws = () => { while (i < text.length && " \t\n\r".includes(text[i])) i++; };
+  function str() {
+    i++;
+    let out = "";
+    for (;;) {
+      const c = text[i];
+      if (c === undefined) return fail("unterminated string");
+      if (c === '"') { i++; return out; }
+      if (c === "\\") {
+        const e = text[i + 1];
+        i += 2;
+        const simple = { '"': '"', "\\": "\\", "/": "/", b: "\b", f: "\f",
+                         n: "\n", r: "\r", t: "\t" };
+        if (e in simple) { out += simple[e]; continue; }
+        if (e === "u") {
+          const code = parseInt(text.substr(i, 4), 16);
+          if (Number.isNaN(code)) return fail("bad \\u escape");
+          i += 4;
+          let pair = String.fromCharCode(code);
+          if (code >= 0xd800 && code <= 0xdbff &&
+              text[i] === "\\" && text[i + 1] === "u") {
+            const low = parseInt(text.substr(i + 2, 4), 16);
+            if (low >= 0xdc00 && low <= 0xdfff) { pair += String.fromCharCode(low); i += 6; }
+          }
+          out += pair;
+          continue;
+        }
+        return fail("bad escape");
+      }
+      out += c;
+      i++;
+    }
+  }
+  function arr() {
+    i++;
+    const out = [];
+    ws();
+    if (text[i] === "]") { i++; return out; }
+    for (;;) {
+      out.push(val());
+      ws();
+      if (text[i] === ",") { i++; continue; }
+      if (text[i] === "]") { i++; return out; }
+      return fail("expected ',' or ']'");
+    }
+  }
+  function obj() {
+    i++;
+    const out = {};
+    ws();
+    if (text[i] === "}") { i++; return out; }
+    for (;;) {
+      ws();
+      if (text[i] !== '"') fail("expected a string key");
+      const key = str();
+      ws();
+      if (text[i] !== ":") fail("expected ':'");
+      i++;
+      out[key] = val();
+      ws();
+      if (text[i] === ",") { i++; continue; }
+      if (text[i] === "}") { i++; return out; }
+      return fail("expected ',' or '}'");
+    }
+  }
+  function val() {
+    ws();
+    const c = text[i];
+    if (c === "{") return obj();
+    if (c === "[") return arr();
+    if (c === '"') return str();
+    if (text.startsWith("true", i)) { i += 4; return true; }
+    if (text.startsWith("false", i)) { i += 5; return false; }
+    if (text.startsWith("null", i)) { i += 4; return null; }
+    if (c === "-" || (c >= "0" && c <= "9")) {
+      const m = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?/.exec(text.slice(i));
+      if (!m) return fail("bad number");
+      i += m[0].length;
+      return new RawNum(m[0]);
+    }
+    return fail(`unexpected character ${JSON.stringify(c)}`);
+  }
+  const out = val();
+  ws();
+  if (i !== text.length) fail("trailing characters");
+  return out;
+}
+
+function canonical(value) {
+  if (value instanceof RawNum) return value.toString();
+  if (value === null || typeof value !== "object") {
+    if (typeof value === "number") return pyRepr(value);
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
+  return "{" + Object.keys(value).sort()
+    .map((k) => JSON.stringify(k) + ":" + canonical(value[k])).join(",") + "}";
+}
+
+// ------------------------------------------------------------ the checks
+function keyStatus(publicHex, entries) {
+  if (!entries || !entries.length) return "unpublished";
+  const lower = String(publicHex).toLowerCase();
+  for (const entry of entries) {
+    if (String(entry.public_key || "").toLowerCase() === lower ||
+        entry.key_id === lower.slice(0, 16))
+      return entry.retired_at ? "retired" : "active";
+  }
+  return "unpublished";
+}
+function trustedKeysFrom(document) {
+  const entries = Array.isArray(document) ? document
+                 : (document && Array.isArray(document.keys)) ? document.keys
+                 : null;
+  if (!entries)
+    throw new Error('key history must be a list of keys (or {"keys": [...]})');
+  const trusted = {};
+  entries.forEach((entry, i) => {
+    if (!entry || typeof entry !== "object" || !entry.public_key)
+      throw new Error(`key history entry ${i} has no public_key`);
+    let pub;
+    try { pub = fromHex(String(entry.public_key)); }
+    catch (e) { throw new Error(`key history entry ${i} public_key is not hex`); }
+    if (pub.length !== 32)
+      throw new Error(`key history entry ${i} public_key is not 32 bytes`);
+    const normalised = Object.assign({}, entry);
+    if (!normalised.key_id) normalised.key_id = hex(pub).slice(0, 16);
+    trusted[normalised.key_id] = normalised;
+  });
+  if (!Object.keys(trusted).length) throw new Error("key history contains no keys");
+  return trusted;
+}
+const PROVENANCE = {
+  active: "the active published key",
+  retired: "a retired published key — rotated out, still in the key history, " +
+           "so this receipt still verifies",
+  unpublished: "the embedded key (no published history to compare it against)",
+};
+function verifyReceipt(receipt, trusted) {
+  const checks = {};
+  const fail = (reason) => ({ ok: false, reason, checks });
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt))
+    return fail("receipt is not a JSON object");
+  const payload = receipt.payload;
+  const block = receipt.signature || {};
+  if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
+      typeof block !== "object" || Array.isArray(block))
+    return fail("receipt has no payload/signature block");
+
+  let body;
+  try { body = utf8(canonical(payload)); }
+  catch (e) { return fail(`payload is not canonicalisable: ${e.message}`); }
+
+  const actual = sha256Hex(body);
+  checks.payload_sha256_matches = actual === receipt.payload_sha256;
+  checks.payload_sha256 = actual;
+  if (!checks.payload_sha256_matches)
+    return fail("payload digest does not match payload_sha256 — the payload " +
+                "was altered after signing");
+
+  if (Number(payload.receipt_version) !== RECEIPT_VERSION) {
+    checks.receipt_version_supported = false;
+    return fail(`receipt_version ${canonical(payload.receipt_version)} is ` +
+                `not supported by this verifier (expects ${RECEIPT_VERSION})`);
+  }
+  checks.receipt_version_supported = true;
+
+  if (block.alg !== SIGNATURE_ALG)
+    return fail(`unsupported signature alg ${JSON.stringify(block.alg)}`);
+  let publicKey, signature;
+  try {
+    publicKey = fromHex(block.public_key || "");
+    signature = fromHex(block.signature || "");
+  } catch (e) { return fail("signature block is not hex"); }
+
+  checks.signature_valid = edVerify(publicKey, body, signature);
+  if (!checks.signature_valid)
+    return fail("signature does not verify for the embedded key");
+
+  const publicHex = hex(publicKey);
+  checks.key_id_matches = block.key_id === publicHex.slice(0, 16);
+  const entries = trusted ? Object.keys(trusted).map((k) => trusted[k]) : null;
+  const status = keyStatus(publicHex, entries);
+  checks.key_trusted = !!trusted;
+  checks.key_status = status;
+  if (trusted && status === "unpublished")
+    return fail(`signed by key ${publicHex.slice(0, 16)}…, which is not in the ` +
+                `published key history — this deployment never published that key`);
+
+  checks.run_id = payload.run_id;
+  checks.disposition = payload.disposition;
+  checks.signed_by = publicHex;
+  return { ok: true,
+           reason: `payload is intact and signed by ${PROVENANCE[status]}`,
+           checks };
+}
+function verifyChain(receipts, options) {
+  const requireRoot = !!(options && options.require_root);
+  const trusted = options && options.trusted_keys;
+  if (!Array.isArray(receipts) || !receipts.length)
+    return { ok: false, reason: "no receipts supplied", checked: 0 };
+  const problems = [];
+  let prevSha = null;
+  receipts.forEach((receipt, i) => {
+    const verdict = verifyReceipt(receipt, trusted);
+    if (!verdict.ok) { problems.push({ index: i, problem: verdict.reason }); return; }
+    const chain = (receipt.payload && receipt.payload.chain) || {};
+    if (i > 0 && chain.prev !== prevSha)
+      problems.push({ index: i, problem:
+        "chain broken: prev does not match the previous receipt's digest (" +
+        String(chain.prev).slice(0, 12) + "… vs " + String(prevSha).slice(0, 12) + "…)" });
+    if (i) {
+      const previousIndex = Number((((receipts[i - 1].payload || {}).chain) || {}).index);
+      if (Number(chain.index) !== previousIndex + 1)
+        problems.push({ index: i, problem: "chain index is not sequential" });
+    }
+    prevSha = receipt.payload_sha256;
+  });
+  const startsAt = Number((((receipts[0].payload || {}).chain) || {}).index);
+  const linkageComplete = startsAt === 0;
+  if (!linkageComplete && requireRoot)
+    problems.push({ index: 0, problem:
+      `chain starts at index ${startsAt}, not 0 — earlier receipts would need ` +
+      `to be supplied` });
+  const last = receipts[receipts.length - 1];
+  return {
+    ok: problems.length === 0,
+    checked: receipts.length,
+    problems,
+    linkage_complete: linkageComplete,
+    starts_at_index: startsAt,
+    head_sha256: last.payload_sha256,
+    signed_by: (last.signature || {}).public_key,
+    note: (problems.length ? "see problems" : "every signature verified") +
+      (linkageComplete ? "" :
+       "; this bundle does not include the start of the chain, so deletion " +
+       "before it cannot be ruled out"),
+  };
+}
+
+return { RECEIPT_VERSION, SIGNATURE_ALG, canonical, parseJson, pyNumber, pyRepr,
+         sha256Hex, sha512, edPublicKey, edSign, edVerify, keyStatus,
+         trustedKeysFrom, verifyReceipt, verifyChain };
+})();
+if (typeof module !== "undefined" && module.exports) module.exports = ReceiptViewer;
+
+/* ====================================================================
+   The page. Verifying is above; this only draws it.
+   ==================================================================== */
+if (typeof document !== "undefined") (function () {
+  const state = { receipts: [], trusted: null, keysDoc: null, names: { receipt: [], keys: null } };
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const short = (s, n = 14) => s ? esc(String(s).slice(0, n)) + "…" : "—";
+
+  function classify(text) {
+    let doc;
+    try { doc = parseJson(text); } catch (e) { throw new Error("not valid JSON"); }
+    if (Array.isArray(doc)) return { kind: "receipts", receipts: doc };
+    if (Array.isArray(doc.receipts)) return { kind: "receipts", receipts: doc.receipts };
+    if (doc.payload && doc.signature) return { kind: "receipts", receipts: [doc] };
+    if (Array.isArray(doc.keys)) return { kind: "keys", doc };
+    throw new Error("expected a receipt, a {\"receipts\":[…]} bundle, or a " +
+                    "{\"keys\":[…]} key history");
+  }
+
+  async function handleFiles(fileList) {
+    const receipts = [], keyDocs = [];
+    for (const file of fileList) {
+      const text = await file.text();
+      let parsed;
+      try { parsed = classify(text); }
+      catch (e) { showError(`${file.name}: ${e.message}`); return; }
+      if (parsed.kind === "receipts") receipts.push(...parsed.receipts);
+      else keyDocs.push(parsed.doc);
+    }
+    if (keyDocs.length) {
+      try {
+        state.trusted = ReceiptViewer.trustedKeysFrom(
+          keyDocs.length === 1 ? keyDocs[0] : { keys: keyDocs.flatMap((d) => d.keys) });
+        state.keysDoc = keyDocs[0];
+        state.names.keys = keyDocs.map((d) => "key history").join(", ");
+      } catch (e) { showError(`${fileList[0].name}: ${e.message}`); return; }
+    }
+    if (receipts.length) state.receipts = receipts;
+    render();
+  }
+
+  function showError(message) {
+    $("verdict").hidden = false;
+    $("banner").className = "banner bad";
+    $("banner").innerHTML = `<span class="glyph">✕</span><span>Cannot verify` +
+      `<span class="why">${esc(message)}</span></span>`;
+    $("checks").innerHTML = "";
+    $("decision").hidden = true;
+    $("chain-panel").hidden = true;
+  }
+
+  function pill(cls, text) { return `<span class="pill ${cls}">${esc(text)}</span>`; }
+  const CHECK_MARK = { true: "✓", false: "✕" };
+
+  function render() {
+    if (!state.receipts.length && !state.trusted) return;
+    $("intro").hidden = false;
+
+    // ---- verdict
+    const single = state.receipts.length === 1;
+    const verdict = single
+      ? ReceiptViewer.verifyReceipt(state.receipts[0], state.trusted)
+      : ReceiptViewer.verifyChain(state.receipts, { trusted_keys: state.trusted });
+    $("verdict").hidden = false;
+    const banner = $("banner");
+    banner.className = "banner " + (verdict.ok ? "ok" : "bad");
+    const headline = verdict.ok
+      ? (single ? "Verified" : `Verified — ${verdict.checked} receipts, chain intact`)
+      : "Not verified";
+    const why = verdict.ok ? verdict.reason
+      : (verdict.reason || (verdict.problems || []).map((p) =>
+          `#${p.index}: ${p.problem}`).join(" · "));
+    banner.innerHTML = `<span class="glyph">${verdict.ok ? "✓" : "✕"}</span>` +
+      `<span>${esc(headline)}<span class="why">${esc(why)}</span></span>`;
+
+    // ---- checks list (single receipt carries the granular ones)
+    const checks = verdict.checks || {};
+    const rows = [];
+    const add = (label, value, good) => rows.push(
+      `<div><dt>${esc(label)}</dt><dd>${good === undefined ? "" :
+        `<b style="color:var(--${good ? "ok" : "bad"})">${CHECK_MARK[good]}</b> `}` +
+      `${esc(value)}</dd></div>`);
+    if (verdict.checks) {
+      add("payload digest", checks.payload_sha256, checks.payload_sha256_matches);
+      add("signature", "ed25519", checks.signature_valid);
+      add("version", ReceiptViewer.RECEIPT_VERSION, checks.receipt_version_supported);
+      add("key id matches", checks.signed_by ? short(checks.signed_by) : "—",
+          checks.key_id_matches);
+      const status = checks.key_status || "unpublished";
+      add("key status", status + (checks.key_trusted ? " (pinned against your key history)"
+        : " (the receipt's own claim — drop the key history to pin it)"),
+          checks.key_trusted ? status !== "unpublished" : undefined);
+    } else {
+      add("receipts checked", verdict.checked, verdict.ok);
+      add("chain starts", verdict.linkage_complete ? "at index 0"
+          : `mid-ledger (index ${verdict.starts_at_index})`,
+          verdict.linkage_complete || undefined);
+      if (verdict.problems && verdict.problems.length)
+        add("problems", verdict.problems.map((p) => `#${p.index}: ${p.problem}`).join("; "), false);
+    }
+    $("checks").innerHTML = rows.join("");
+
+    // ---- key history panel
+    $("keys-panel").hidden = !state.trusted;
+    if (state.trusted) {
+      const entries = Object.keys(state.trusted).map((k) => state.trusted[k]);
+      $("keys-pin").textContent =
+        `pinned against ${entries.length} published ${entries.length === 1 ? "key" : "keys"}`;
+      $("keys-list").innerHTML = entries.map((e) =>
+        `<li><span class="hash">${esc(e.key_id)}…</span>` +
+        pill(e.retired_at ? "warn" : "ok", e.retired_at ? "retired" : "active") +
+        `<span style="color:var(--muted)">${esc(e.created_at || "")}</span></li>`).join("");
+    }
+
+    // ---- chain panel
+    $("chain-panel").hidden = single;
+    if (!single) {
+      $("chain-list").innerHTML = state.receipts.map((r, i) => {
+        const p = r.payload || {}, chain = p.chain || {};
+        const v = ReceiptViewer.verifyReceipt(r, state.trusted);
+        return `<li><b>#${esc(chain.index)}</b> ` +
+          pill(v.ok ? "ok" : "bad", v.ok ? "verified" : "failed") +
+          `<span>${esc(p.disposition || "?")}</span>` +
+          `<span class="hash" title="links to the previous receipt">${short(chain.prev, 12)}</span>` +
+          `<span style="color:var(--muted)">${esc(p.receipt_id || "")}</span></li>`;
+      }).join("");
+    }
+
+    // ---- the decision
+    if (single) renderDecision(state.receipts[0]);
+    else $("decision").hidden = true;
+  }
+
+  function renderDecision(receipt) {
+    const p = receipt.payload || {};
+    const d = p.decision || {}, q = p.quality, r = p.response, g = p.gates || {};
+    const rows = [];
+    const row = (label, value) => { if (value !== undefined && value !== null)
+      rows.push(`<tr><th>${esc(label)}</th><td>${value}</td></tr>`); };
+    row("receipt", `<span class="hash">${esc(p.receipt_id)}</span>`);
+    row("issued", esc(p.issued_at));
+    row("run / ticket", `<span class="hash">${esc(p.run_id)} / ${esc(p.ticket_id)}</span>`);
+    row("disposition", pill(p.disposition === "failed" ? "bad"
+        : p.disposition === "auto_resolved" || p.disposition === "auto_replied" ? "ok" : "warn",
+        p.disposition || "?"));
+    row("risk score", d.risk_score == null ? "—" :
+      `${esc(d.risk_score)} <span style="color:var(--muted)">(gates: execute ≤ ` +
+      `${esc(g.auto_execute_max_risk)}, block ≥ ${esc(g.block_min_risk)}, ` +
+      `confidence ≥ ${esc(g.min_auto_confidence)})</span>`);
+    row("confidence", esc(d.confidence));
+    row("reason", esc(d.reason));
+    row("proposed actions", (d.proposed_actions || []).map(esc).join(", ") || "—");
+    row("quality gate", q ? pill(q.passed ? "ok" : "bad", q.passed ? "passed" : "failed") +
+        (q.issues && q.issues.length ? ` <span style="color:var(--muted)">${esc(q.issues.join("; "))}</span>` : "") : "—");
+    row("grounded in", (r && r.grounded_in || []).map(esc).join(", ") || "—");
+    row("retrieved", (p.retrieval || []).map((c) =>
+        `${esc(c.title)} <span style="color:var(--muted)">(${esc(c.score)})</span>`).join("; ") || "—");
+    row("reply", r ? `<span class="hash" title="sha256 of the reply, never its text">${short(r.sha256, 32)}</span> ` +
+        `<span style="color:var(--muted)">(${esc(r.chars)} chars — text is never signed)</span>` : "—");
+    row("actions taken", (p.actions_taken || []).map(esc).join(", ") || "—");
+    row("cost / mode", `${esc(p.cost_usd)} USD · ${esc(p.mode)}`);
+    row("chain", `#${esc((p.chain || {}).index)} → <span class="hash">${short((p.chain || {}).prev, 24)}</span>`);
+    $("decision-table").innerHTML = rows.join("");
+    $("decision").hidden = false;
+  }
+
+  // ---- wiring
+  for (const [zoneId, inputId, key] of [["zone-receipt", "file-receipt", "receipt"],
+                                        ["zone-keys", "file-keys", "keys"]]) {
+    const zone = $(zoneId), input = $(inputId);
+    zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("over"); });
+    zone.addEventListener("dragleave", () => zone.classList.remove("over"));
+    zone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      zone.classList.remove("over");
+      handleFiles(e.dataTransfer.files);
+    });
+    input.addEventListener("change", () => {
+      if (input.files.length) handleFiles(input.files);
+      state.names[key] = Array.from(input.files).map((f) => f.name).join(", ");
+      $(key === "receipt" ? "receipt-names" : "keys-names").textContent = state.names[key];
+    });
+  }
+})();
+</script>
+</body>
+</html>
