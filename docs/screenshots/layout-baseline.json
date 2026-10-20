@@ -1,0 +1,364 @@
+{
+ "platform": "win32",
+ "themes": {
+  "dark": {
+   "theme": "dark",
+   "viewport": [
+    1280,
+    900
+   ],
+   "document": {
+    "w": 1280,
+    "h": 4853
+   },
+   "overflow_x": false,
+   "tokens": {
+    "--bg": "#0a0e1c",
+    "--surface": "#121a30",
+    "--surface-2": "#1a2440",
+    "--text": "#e9edf9",
+    "--muted": "#95a2c6",
+    "--border": "#26325a",
+    "--accent": "#6d9bff",
+    "--ok": "",
+    "--bad": "#ff7c88",
+    "--warn": "#ffbe63"
+   },
+   "headings": [
+    "Side A \u00b7 Process Analyzer & ROI",
+    "Side B \u00b7 Agentic Pipeline",
+    "Human-in-the-Loop \u00b7 Approval Queue",
+    "Cost by Agent (USD)",
+    "Dispositions",
+    "Recent Audit Events",
+    "LLM Budget",
+    "Drift Canary",
+    "Shadow mode",
+    "Quality Gate",
+    "A/B Cycle Time \u00b7 AI vs manual",
+    "Market cost comparison",
+    "Knowledge base",
+    "Recent Ticket Runs",
+    "Power BI feeds"
+   ],
+   "cards": [
+    {
+     "title": "",
+     "box": [
+      74,
+      377,
+      1132,
+      65
+     ]
+    },
+    {
+     "title": "Side A \u00b7 Process Analyzer & ROI",
+     "box": [
+      74,
+      458,
+      558,
+      401
+     ]
+    },
+    {
+     "title": "Side B \u00b7 Agentic Pipeline",
+     "box": [
+      648,
+      458,
+      558,
+      401
+     ]
+    },
+    {
+     "title": "Human-in-the-Loop \u00b7 Approval Queue",
+     "box": [
+      74,
+      874,
+      1132,
+      1136
+     ]
+    },
+    {
+     "title": "Cost by Agent (USD)",
+     "box": [
+      74,
+      2026,
+      558,
+      606
+     ]
+    },
+    {
+     "title": "Dispositions",
+     "box": [
+      648,
+      2026,
+      558,
+      606
+     ]
+    },
+    {
+     "title": "LLM Budget",
+     "box": [
+      74,
+      2648,
+      367,
+      242
+     ]
+    },
+    {
+     "title": "Drift Canary",
+     "box": [
+      457,
+      2648,
+      367,
+      242
+     ]
+    },
+    {
+     "title": "Shadow mode",
+     "box": [
+      839,
+      2648,
+      367,
+      242
+     ]
+    },
+    {
+     "title": "Quality Gate",
+     "box": [
+      74,
+      2906,
+      558,
+      207
+     ]
+    },
+    {
+     "title": "A/B Cycle Time \u00b7 AI vs manual",
+     "box": [
+      648,
+      2906,
+      558,
+      207
+     ]
+    },
+    {
+     "title": "Market cost comparison",
+     "box": [
+      74,
+      3129,
+      1132,
+      652
+     ]
+    },
+    {
+     "title": "Knowledge base",
+     "box": [
+      74,
+      3797,
+      1132,
+      388
+     ]
+    },
+    {
+     "title": "Recent Ticket Runs",
+     "box": [
+      74,
+      4202,
+      1132,
+      456
+     ]
+    },
+    {
+     "title": "Power BI feeds",
+     "box": [
+      74,
+      4673,
+      1132,
+      124
+     ]
+    }
+   ],
+   "platform": "win32"
+  },
+  "bright": {
+   "theme": "bright",
+   "viewport": [
+    1280,
+    900
+   ],
+   "document": {
+    "w": 1280,
+    "h": 4853
+   },
+   "overflow_x": false,
+   "tokens": {
+    "--bg": "#eef2f9",
+    "--surface": "#ffffff",
+    "--surface-2": "#f4f7fc",
+    "--text": "#0f1729",
+    "--muted": "#586683",
+    "--border": "#dfe6f2",
+    "--accent": "#2a5fe0",
+    "--ok": "",
+    "--bad": "#c8283c",
+    "--warn": "#8a5300"
+   },
+   "headings": [
+    "Side A \u00b7 Process Analyzer & ROI",
+    "Side B \u00b7 Agentic Pipeline",
+    "Human-in-the-Loop \u00b7 Approval Queue",
+    "Cost by Agent (USD)",
+    "Dispositions",
+    "Recent Audit Events",
+    "LLM Budget",
+    "Drift Canary",
+    "Shadow mode",
+    "Quality Gate",
+    "A/B Cycle Time \u00b7 AI vs manual",
+    "Market cost comparison",
+    "Knowledge base",
+    "Recent Ticket Runs",
+    "Power BI feeds"
+   ],
+   "cards": [
+    {
+     "title": "",
+     "box": [
+      74,
+      377,
+      1132,
+      65
+     ]
+    },
+    {
+     "title": "Side A \u00b7 Process Analyzer & ROI",
+     "box": [
+      74,
+      458,
+      558,
+      401
+     ]
+    },
+    {
+     "title": "Side B \u00b7 Agentic Pipeline",
+     "box": [
+      648,
+      458,
+      558,
+      401
+     ]
+    },
+    {
+     "title": "Human-in-the-Loop \u00b7 Approval Queue",
+     "box": [
+      74,
+      874,
+      1132,
+      1136
+     ]
+    },
+    {
+     "title": "Cost by Agent (USD)",
+     "box": [
+      74,
+      2026,
+      558,
+      606
+     ]
+    },
+    {
+     "title": "Dispositions",
+     "box": [
+      648,
+      2026,
+      558,
+      606
+     ]
+    },
+    {
+     "title": "LLM Budget",
+     "box": [
+      74,
+      2648,
+      367,
+      242
+     ]
+    },
+    {
+     "title": "Drift Canary",
+     "box": [
+      457,
+      2648,
+      367,
+      242
+     ]
+    },
+    {
+     "title": "Shadow mode",
+     "box": [
+      839,
+      2648,
+      367,
+      242
+     ]
+    },
+    {
+     "title": "Quality Gate",
+     "box": [
+      74,
+      2906,
+      558,
+      207
+     ]
+    },
+    {
+     "title": "A/B Cycle Time \u00b7 AI vs manual",
+     "box": [
+      648,
+      2906,
+      558,
+      207
+     ]
+    },
+    {
+     "title": "Market cost comparison",
+     "box": [
+      74,
+      3129,
+      1132,
+      652
+     ]
+    },
+    {
+     "title": "Knowledge base",
+     "box": [
+      74,
+      3797,
+      1132,
+      388
+     ]
+    },
+    {
+     "title": "Recent Ticket Runs",
+     "box": [
+      74,
+      4202,
+      1132,
+      456
+     ]
+    },
+    {
+     "title": "Power BI feeds",
+     "box": [
+      74,
+      4673,
+      1132,
+      124
+     ]
+    }
+   ],
+   "platform": "win32"
+  }
+ },
+ "note": "Regenerate with: python -m scripts.visual_check --update"
+}
