@@ -748,7 +748,11 @@ if (typeof document !== "undefined") (function () {
 
   function classify(text) {
     let doc;
-    try { doc = parseJson(text); } catch (e) { throw new Error("not valid JSON"); }
+    // ReceiptViewer.parseJson, not a bare parseJson: the verifier lives
+    // inside its own closure, and a missing name here reads as "not valid
+    // JSON" to the user — which it did, until the browser smoke test.
+    try { doc = ReceiptViewer.parseJson(text); }
+    catch (e) { throw new Error("not valid JSON"); }
     if (Array.isArray(doc)) return { kind: "receipts", receipts: doc };
     if (Array.isArray(doc.receipts)) return { kind: "receipts", receipts: doc.receipts };
     if (doc.payload && doc.signature) return { kind: "receipts", receipts: [doc] };

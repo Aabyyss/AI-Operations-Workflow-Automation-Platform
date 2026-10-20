@@ -167,6 +167,71 @@ def files(signed, tmp_path):
     return out
 
 
+def _browser_ready():
+    return (shutil.which("node") is not None
+            and (ROOT / "node_modules" / "playwright-core").exists())
+
+
+needs_browser = pytest.mark.skipif(
+    not _browser_ready(), reason="playwright-core / Chrome not installed")
+
+
+def _browser(receipt, keys=None):
+    args = ["node", str(ROOT / "tests" / "viewer_browser_check.mjs"), str(receipt)]
+    if keys:
+        args.append(str(keys))
+    proc = subprocess.run(args, cwd=ROOT, capture_output=True)
+    if proc.returncode == 3:            # no browser here — a skip, not a failure
+        pytest.skip(proc.stderr.decode("utf-8").strip() or "no browser")
+    assert proc.returncode == 0, proc.stderr.decode("utf-8")
+    return json.loads(proc.stdout.decode("utf-8"))
+
+
+@needs_browser
+def test_the_page_renders_a_verified_decision_in_a_browser(files):
+    """The JavaScript tests import the verifier and never touch the page,
+    which is exactly how a closure-scope bug ('parseJson is not defined',
+    reported to the user as 'not valid JSON') survived them."""
+    state = _browser(files["r1"], files["keys"])
+    assert state["verified"] is True, state["banner"]
+    assert "Verified" in state["banner"]        # the banner opens with a glyph
+    assert "retired" in state["banner"]      # rotated key, still verifies
+    assert state["consoleErrors"] == []
+    assert len(state["rows"]) >= 10
+    rows = " | ".join(state["rows"])
+    assert "auto_resolved" in rows
+    assert "refund_policy" in rows           # what the answer was grounded in
+    assert "Refund Policy" in rows           # the retrieved document itself
+    assert "gates: execute" in rows          # risk shown against its limit
+    assert state["keysPin"] == "pinned against 2 published keys"
+
+
+@needs_browser
+def test_the_page_verifies_without_a_key_history_and_says_what_that_means(files):
+    state = _browser(files["r1"])
+    assert state["verified"] is True
+    assert "embedded key" in state["banner"]
+    assert state["keysHidden"] is True
+
+
+@needs_browser
+def test_the_page_refuses_a_tampered_file_with_a_visible_reason(files, signed,
+                                                                tmp_path):
+    tampered = json.loads(json.dumps(signed["r1"]))
+    tampered["payload"]["decision"]["risk_score"] = 0.99
+    path = tmp_path / "tampered.json"
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(tampered, f, ensure_ascii=False)
+    state = _browser(path, files["keys"])
+    assert state["verified"] is False
+    assert "Not verified" in state["banner"]
+    assert "altered after signing" in state["banner"]
+    # The card still renders — an auditor wants to see what the file claims —
+    # under a banner that says the claim is not attested to.
+    assert state["decisionHidden"] is False
+    assert "0.99" in " | ".join(state["rows"])
+
+
 @needs_node
 def test_the_canonical_form_is_byte_identical_to_python(script_path, signed, tmp_path):
     """The one place a second implementation can silently disagree: the
