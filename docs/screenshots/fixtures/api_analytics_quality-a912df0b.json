@@ -1,0 +1,1 @@
+{"escalations_decided":1,"escalations_pending":1,"reviewer_approved":1,"reviewer_rejected":0,"gate_precision":0.0,"auto_resolved_total":7,"flagged_by_feedback":0,"gate_recall_proxy":0.0,"note":"precision = rejected escalations / decided escalations; recall proxy = thumbs-down auto-resolutions / auto-resolutions"}

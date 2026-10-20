@@ -1,0 +1,1 @@
+{"pending":1,"approved":1,"rejected":0,"aging_buckets":{"under_15m":0,"15m_to_1h":0,"1h_to_4h":0,"over_4h":1},"oldest_pending_minutes":1388.1,"turnaround_minutes":{"mean":0.0,"median":0.0,"max":0.0,"sample_size":1},"escalation_rate_pct":22.2,"tickets_processed":9}

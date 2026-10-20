@@ -1,0 +1,1 @@
+{"runs":9,"latency_ms":{"p50":39.636,"p95":64.211,"max":65.847,"mean":41.567},"failure_rate_pct":0.0,"containment_rate_pct":77.8,"human_touch_rate_pct":22.2,"cost_per_run_usd":{"mean":0.00019,"p95":0.00024},"feedback":{"feedback_count":1,"thumbs_up":1,"thumbs_down":0,"satisfaction_pct":100.0,"with_correction":0,"coverage_pct":11.1}}
