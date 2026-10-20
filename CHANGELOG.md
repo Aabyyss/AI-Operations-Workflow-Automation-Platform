@@ -60,6 +60,18 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   quality gate had no feedback to count. Both fixed, with contract tests.
 
 ### Added
+- **A visual gate for the dashboard** — `python -m scripts.visual_check`
+  captures both themes and fails on drift, comparing three things because each
+  catches what the others cannot: pixels (with a tolerance that separates
+  antialiasing from a recoloured surface and a bounding box for what moved),
+  card geometry and resolved design tokens, and headings that appeared or
+  vanished. Captures replay frozen API responses — one file per
+  endpoint+query, refreshed only with `--rerecord` — so a diff measures the
+  design and not today's numbers. Exit codes are the contract: `0` matches,
+  `1` drifted, `2` could not check; a check that could not run is never green.
+  The PNG decoder, the tolerances and all three exit codes are tested in the
+  normal suite, so the gate's own judgment is checked by something other than
+  the gate.
 - **Rotatable receipt keys with a published history** — `POST
   /api/receipts/rotate-key` (admin) or `python -m scripts.rotate_receipt_key`
   retires the active signing key into an append-only public history and drops
