@@ -259,6 +259,23 @@ table, because an empty index reads to the pipeline as "no policy matched".
   collection, so containment and escalation rates do not move. Clear a window
   with `DELETE /api/analytics/shadow` (admin key).
 
+## 9. Visual regression for the dashboard
+
+- `python -m scripts.visual_check` captures the dashboard in both themes and
+  compares the pixels, the geometry and the design tokens against
+  `docs/screenshots/` — run it after any CSS or layout change.
+- `--update` accepts the current look as the new baseline (commit the PNGs and
+  `layout-baseline.json` with the change that caused them, never on their own).
+- Exit codes are the contract: `0` matches, `1` drifted, `2` could not check
+  (no baseline, no browser, no server). A check that could not run is never
+  green.
+- Captures replay the frozen API responses in `docs/screenshots/fixtures/`, so
+  a diff measures the design and not today's numbers; `--rerecord` refreshes
+  them deliberately, in their own commit.
+- It needs Chrome and `npm install --no-save playwright-core`; the comparator
+  itself (`scripts/visual_check.py`) is plain Python and is tested in the
+  normal suite by `tests/test_visual_check.py`.
+
 - Config defaults live in `backend/config.py`; env vars override per deployment.
 - The knowledge base is versioned with the repo — policy changes ship as PRs,
   and retrieval tests catch corpus regressions.
