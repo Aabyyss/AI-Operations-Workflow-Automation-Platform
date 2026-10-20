@@ -21,9 +21,13 @@ anyone holding a later one, without a central log server.
     payload_sha256  → what the next receipt points back at
 
 The key lives in AIOPS_RECEIPT_KEY (hex) or, for a demo, is generated once
-into data/receipt_signing_key.json. Rotating it invalidates old receipts
-against the current public key, which is exactly why the public key travels
-inside every receipt.
+into data/receipt_signing_key.json. Rotation (rotate_key, or `python -m
+scripts.rotate_receipt_key`) drops the old *secret* — nothing can be signed
+with it again — and keeps the old *public* keys in the published history
+(data/receipt_keys.json), so every receipt ever issued still verifies and
+says whether its key is the active one or a retired one. That history is
+what `--keys` pins against: without it a receipt is only self-consistent,
+with it a receipt signed by a key this deployment never published fails.
 """
 from __future__ import annotations
 
@@ -45,14 +49,134 @@ SIGNATURE_ALG = "ed25519"
 # humans reading a table of receipts ("signed by 3d4017c3…").
 _cache: dict[str, Any] = {"path": None, "seed": None}
 
+KEY_HISTORY_VERSION = 1
+
 
 # --------------------------------------------------------------------- the key
 def key_path() -> Path:
+    """The *signing* half: the active seed. Secret — and rotation drops the
+    old one, so a retired key cannot sign anything ever again."""
     return Path(config.DATA_DIR) / "receipt_signing_key.json"
 
 
+def key_history_path() -> Path:
+    """The *published* half: public keys only, oldest first, active last.
+
+    Deliberately a different file from the seed: this one is meant to leave
+    the deployment (served over HTTP, dropped next to a receipt file), so it
+    must never contain a secret.
+    """
+    return Path(config.DATA_DIR) / "receipt_keys.json"
+
+
+def _entry(seed: bytes, *, created_at: str | None,
+           retired_at: str | None = None) -> dict:
+    pub = ed25519.public_key(seed).hex()
+    return {"key_id": pub[:16], "public_key": pub,
+            "created_at": created_at, "retired_at": retired_at}
+
+
+def _read_history_file() -> list[dict]:
+    """Entries from disk; [] when there is no history yet.
+
+    A corrupt history raises rather than returning []: silently re-creating
+    it would drop every retired key, which is the one thing that must never
+    happen quietly — old receipts would stop verifying.
+    """
+    path = key_history_path()
+    if not path.exists():
+        return []
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    keys = doc.get("keys") if isinstance(doc, dict) else doc
+    if not isinstance(keys, list):
+        raise ValueError(f"{path.name} does not contain a key history")
+    return keys
+
+
+def _write_history(entries: list[dict]) -> None:
+    path = key_history_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    doc = {"version": KEY_HISTORY_VERSION, "alg": SIGNATURE_ALG, "keys": entries}
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(doc, indent=1), encoding="utf-8")
+    tmp.replace(path)
+
+
+def _write_seed(seed: bytes, created_at: str | None) -> None:
+    path = key_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({"seed": seed.hex(), "created_at": created_at},
+                              indent=1), encoding="utf-8")
+    try:
+        tmp.chmod(0o600)
+    except OSError:
+        pass  # Windows without POSIX modes: the file is per-user anyway
+    tmp.replace(path)
+
+
+def published_history() -> list[dict] | None:
+    """The history this deployment has already published — or None.
+
+    Never creates anything: verification is a read path, and the auditor's
+    copy of this code must not conjure a key file into existence while they
+    are checking a receipt they were handed.
+    """
+    configured = (config.RECEIPT_KEY or "").strip()
+    if configured:
+        try:
+            seed = bytes.fromhex(configured)
+        except ValueError:
+            return None
+        if len(seed) != ed25519.SEED_BYTES:
+            return None
+        return [_entry(seed, created_at=None)]
+    try:
+        entries = _read_history_file()
+        if entries:
+            return entries
+        path = key_path()
+        if path.exists():
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            seed = bytes.fromhex(raw["seed"])
+            return [_entry(seed, created_at=raw.get("created_at"))]
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return None
+    return None
+
+
+def key_history() -> list[dict]:
+    """Every key this deployment has signed with, oldest first.
+
+    Unlike published_history this *will* create the first entry (a fresh
+    deployment has nothing published yet), which is what rotation and the
+    publish endpoints need.
+    """
+    existing = published_history()
+    if existing is not None:
+        return existing
+    seed = signing_seed()
+    return [_entry(seed, created_at=iso_now())]
+
+
+def key_history_document() -> dict:
+    """The publishable view: what `GET /api/receipts/key-history` serves and
+    what an auditor drops in front of the verifier as `--keys`."""
+    entries = [dict(e, status="retired" if e.get("retired_at") else "active")
+               for e in key_history()]
+    return {"version": KEY_HISTORY_VERSION, "alg": SIGNATURE_ALG,
+            "active_key_id": entries[-1]["key_id"] if entries else None,
+            "keys": entries}
+
+
 def signing_seed() -> bytes:
-    """The Ed25519 seed: configured, or generated once and persisted."""
+    """The Ed25519 seed of the *active* key: configured, or generated once
+    and persisted — and always consistent with the published history.
+
+    The consistency check is the point of the pair of files: signing with a
+    key that was never published would produce receipts that fail every
+    pinning check, which is worse than refusing to sign.
+    """
     configured = (config.RECEIPT_KEY or "").strip()
     if configured:
         try:
@@ -66,17 +190,32 @@ def signing_seed() -> bytes:
     path = key_path()
     if _cache["path"] == str(path) and _cache["seed"]:
         return _cache["seed"]
+
+    history = _read_history_file()
     if path.exists():
-        seed = bytes.fromhex(json.loads(path.read_text(encoding="utf-8"))["seed"])
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        seed = bytes.fromhex(raw["seed"])
+        created_at = raw.get("created_at")
+    elif history:
+        raise ValueError(
+            f"{path.name} is missing but {key_history_path().name} records active "
+            f"key {history[-1].get('key_id')} — restore that key's seed file "
+            f"before signing (refusing to sign with a fresh unpublished key)")
     else:
         seed = secrets.token_bytes(ed25519.SEED_BYTES)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"seed": seed.hex(), "created_at": iso_now()},
-                                   indent=1), encoding="utf-8")
-        try:
-            path.chmod(0o600)
-        except OSError:
-            pass  # Windows without POSIX modes: the file is per-user anyway
+        created_at = iso_now()
+        _write_seed(seed, created_at)
+
+    pub = ed25519.public_key(seed).hex()
+    if history and history[-1].get("public_key") != pub:
+        raise ValueError(
+            f"{key_history_path().name} says the active key is "
+            f"{str(history[-1].get('key_id'))}… but {path.name} holds the seed for "
+            f"{pub[:16]}… — restore the matching seed file or republish the "
+            f"history (refusing to sign with an unpublished key)")
+    if not history:
+        _write_history([_entry(seed, created_at=created_at)])
+
     _cache["path"] = str(path)
     _cache["seed"] = seed
     return seed
@@ -88,6 +227,51 @@ def public_key_hex() -> str:
 
 def key_id() -> str:
     return public_key_hex()[:16]
+
+
+def rotate_key() -> dict:
+    """Retire the active key; start signing with a new one.
+
+    What is dropped is the old *secret* — after this returns, nothing can
+    be signed with the retired key, which is what makes rotation a rotation
+    rather than an addition. What is kept is its *public* half, in the
+    published history, so every receipt it ever signed still verifies and
+    is reported as signed by a retired key.
+
+    Both files are written to temp files and moved into place, so a crash
+    mid-rotation cannot leave the seed file and the history disagreeing
+    about who is active (signing_seed refuses to run in that state).
+    """
+    if (config.RECEIPT_KEY or "").strip():
+        raise ValueError(
+            "AIOPS_RECEIPT_KEY is set — this deployment's key comes from the "
+            "environment; unset it to rotate the file-based key")
+    signing_seed()  # ensures both files exist and agree
+    history = key_history()
+    now = iso_now()
+
+    # Everything currently active becomes retired, in place (order is kept:
+    # the history is append-only, oldest first).
+    entries = [dict(e, retired_at=e.get("retired_at") or now) for e in history]
+    new_seed = secrets.token_bytes(ed25519.SEED_BYTES)
+    entries.append(_entry(new_seed, created_at=now))
+
+    _write_history(entries)
+    _write_seed(new_seed, now)
+    _cache["path"] = None
+    _cache["seed"] = None
+
+    result = {"rotated_at": now,
+              "active": entries[-1],
+              "retired": [e for e in entries if e.get("retired_at")],
+              "history": {"version": KEY_HISTORY_VERSION, "alg": SIGNATURE_ALG,
+                          "keys": [dict(e, status="retired" if e.get("retired_at")
+                                        else "active") for e in entries]}}
+    audit_log("receipt_key_rotated", {
+        "active_key_id": entries[-1]["key_id"],
+        "retired_key_ids": [e["key_id"] for e in result["retired"]],
+        "published_keys": len(entries)})
+    return result
 
 
 # ------------------------------------------------------------------- canonical
