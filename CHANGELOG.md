@@ -60,6 +60,17 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   quality gate had no feedback to count. Both fixed, with contract tests.
 
 ### Added
+- **Rotatable receipt keys with a published history** — `POST
+  /api/receipts/rotate-key` (admin) or `python -m scripts.rotate_receipt_key`
+  retires the active signing key into an append-only public history and drops
+  the retired *secret*, so nothing can be signed with it again. Older receipts
+  do not fail: they verify against the history and report the key they were
+  signed with as "retired", which is the truth, instead of "invalid", which
+  was a lie about a file nobody altered. `GET /api/receipts/key-history`
+  publishes the pins; `--keys` on the offline verifier (and `pin=true` over
+  HTTP) verifies against a history the auditor obtained themselves, and a
+  signature from a key outside it fails, named. The browser viewer shows the
+  same provenance, so a receipt checked by hand says whose key signed it too.
 - **Signed decision receipts** — one artifact per decision, signed with Ed25519
   (RFC 8032 implemented in `backend/ed25519.py`, verified against the RFC's own
   vectors) and chained by digest. The payload carries what an auditor needs to
