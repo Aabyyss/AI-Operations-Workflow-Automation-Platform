@@ -243,8 +243,14 @@ table, because an empty index reads to the pipeline as "no policy matched".
   *whose* key signed it.
 - **Key handling:** `AIOPS_RECEIPT_KEY` should be set explicitly on any shared
   deployment; the generated dev key lives in `data/receipt_signing_key.json`.
-  Rotating the key makes older receipts fail against the newly published key —
-  keep the old one recorded if you need them verifiable.
+- **Rotation:** `POST /api/receipts/rotate-key` (admin key) or
+  `python -m scripts.rotate_receipt_key` retires the current key and starts a
+  new one. The retired key stays in the published history
+  (`GET /api/receipts/key-history`), so receipts signed before a rotation still
+  verify — they report which key signed them and whether it is active or
+  retired. Verify with `--keys published_keys.json` to pin against a history
+  the auditor obtained themselves; a receipt's embedded key still verifies on
+  its own, but pinning is what tells them whose key it is.
 - **A run with no receipt** says so on the run record (`receipt_error`) and in
   the dashboard. Signing happens after the run is stored, so a signing failure
   never hides or discards a decision that was executed.
