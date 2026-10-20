@@ -199,10 +199,43 @@ def list_runs(limit: int = 50) -> list[dict]:
 # ---------------------------------------------------------------------------
 @app.get("/api/receipts/public-key")
 def receipt_public_key() -> dict:
-    """The key an auditor pins. Every receipt also carries its own copy."""
+    """The key an auditor pins. Every receipt also carries its own copy.
+
+    The sibling history is what makes that pin durable across a rotation:
+    the active key identifies the present, the history keeps the past
+    verifiable.
+    """
     return {"alg": receipts.SIGNATURE_ALG,
             "key_id": receipts.key_id(),
-            "public_key": receipts.public_key_hex()}
+            "public_key": receipts.public_key_hex(),
+            "key_history": "/api/receipts/key-history"}
+
+
+@app.get("/api/receipts/key-history")
+def receipt_key_history() -> dict:
+    """Every key this deployment has signed with — public keys only.
+
+    This is the file an auditor pins against (`--keys` on the offline
+    verifier, or `pin=true` below): it is deliberately secret-free, so
+    publishing it is safe, and append-only, so a retired key never forgets
+    the receipts it signed.
+    """
+    return receipts.key_history_document()
+
+
+@app.post("/api/receipts/rotate-key")
+def rotate_receipt_key(_role: str = Depends(require_admin)) -> dict:
+    """Retire the active signing key and publish a new one (admin role).
+
+    Receipts signed before rotation keep verifying against the history
+    this returns; the retired secret is dropped, so nothing can be signed
+    with it again. Reversible in the only sense that matters — nothing is
+    deleted from the ledger.
+    """
+    try:
+        return receipts.rotate_key()
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @app.get("/api/receipts")
@@ -212,9 +245,19 @@ def list_receipts(limit: int = 50) -> list[dict]:
 
 
 @app.get("/api/receipts/verify")
-def verify_stored_receipts(require_root: bool = False) -> dict:
-    """Verify this deployment's whole chain: signatures and links."""
-    return receipts.verify_chain(receipts.all_receipts(), require_root=require_root)
+def verify_stored_receipts(require_root: bool = False, pin: bool = False) -> dict:
+    """Verify this deployment's whole chain: signatures and links.
+
+    `pin=true` additionally requires every signature to come from a key in
+    the published history — a receipt signed by anything else fails even
+    though its own signature is valid.
+    """
+    trusted = (receipts.trusted_keys_from(receipts.key_history_document())
+               if pin else None)
+    verdict = receipts.verify_chain(receipts.all_receipts(),
+                                    require_root=require_root, trusted_keys=trusted)
+    verdict["pinned"] = pin
+    return verdict
 
 
 @app.post("/api/receipts/verify")
@@ -222,12 +265,22 @@ def verify_supplied_receipts(body: dict) -> dict:
     """Verify a receipt (or {"receipts": [...]}) someone hands you.
 
     Same check as `python -m scripts.verify_receipt`, over HTTP — for the
-    auditor who would rather paste JSON than install anything.
+    auditor who would rather paste JSON than install anything. `"pin": true`
+    pins against this deployment's published key history.
     """
+    trusted = (receipts.trusted_keys_from(receipts.key_history_document())
+               if body.get("pin") else None)
     if isinstance(body.get("receipts"), list):
-        return receipts.verify_chain(body["receipts"],
-                                     require_root=bool(body.get("require_root")))
-    return receipts.verify_receipt(body)
+        verdict = receipts.verify_chain(
+            body["receipts"], require_root=bool(body.get("require_root")),
+            trusted_keys=trusted)
+    else:
+        # {"receipt": {...}, "pin": true} wraps a single receipt so the pin
+        # flag has somewhere to live; a bare receipt body still works.
+        single = body.get("receipt") if isinstance(body.get("receipt"), dict) else body
+        verdict = receipts.verify_receipt(single, trusted_keys=trusted)
+    verdict["pinned"] = bool(body.get("pin"))
+    return verdict
 
 
 @app.get("/api/runs/{run_id}/receipt.json")
