@@ -4,16 +4,20 @@
     python -m scripts.verify_receipt receipt.json
     python -m scripts.verify_receipt receipts/*.json          # a chain
     python -m scripts.verify_receipt bundle.json --require-root --json
+    python -m scripts.verify_receipt receipt.json --keys published_keys.json
 
 What this proves:
   * the payload is exactly what was signed (sha256 of its canonical form),
   * the signature is valid for the public key embedded in the receipt,
   * in a multi-file run, each receipt links to the digest of the one before.
 
-What it cannot prove, and says so rather than implying otherwise: that the
-key belongs to the organisation you think it does. That is what pinning is
-for — compare `public_key` against the value published at
-`GET /api/receipts/public-key` through a channel you already trust.
+What it cannot prove on its own, and says so rather than implying otherwise:
+that the key belongs to the organisation you think it does. A receipt embeds
+its own public key, so a receipt *anyone* signed verifies. `--keys` closes
+that gap: pass the published key history (`GET /api/receipts/key-history`,
+or data/receipt_keys.json straight from the deployment) and a receipt
+signed by a key outside it fails, named. Without `--keys` the verdict still
+reports the key's status — active, retired, unpublished — as information.
 
 Exit codes: 0 all verified, 1 verification failed, 2 bad input.
 """
@@ -57,9 +61,26 @@ def main() -> int:
                     help="receipt JSON file(s) or a bundle; order is the chain order")
     ap.add_argument("--require-root", action="store_true",
                     help="fail unless the chain starts at index 0 (no missing history)")
+    ap.add_argument("--keys", type=Path, metavar="PATH",
+                    help="published key history (GET /api/receipts/key-history or "
+                         "data/receipt_keys.json); a receipt signed by a key not "
+                         "in it fails")
     ap.add_argument("--json", action="store_true",
                     help="machine-readable result on stdout")
     args = ap.parse_args()
+
+    trusted = None
+    if args.keys:
+        try:
+            trusted = receipts.trusted_keys_from(
+                json.loads(args.keys.read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"error: cannot read key history {args.keys}: {exc}", file=sys.stderr)
+            return 2
+        except ValueError as exc:
+            print(f"error: {args.keys} is not a usable key history: {exc}",
+                  file=sys.stderr)
+            return 2
 
     receipts_in: list[dict] = []
     for path in args.files:
@@ -72,12 +93,13 @@ def main() -> int:
     if len(receipts_in) == 1 and not args.require_root:
         # One receipt is the common case: report its own verdict without
         # dragging in a chain question the caller did not ask.
-        result = receipts.verify_receipt(receipts_in[0])
+        result = receipts.verify_receipt(receipts_in[0], trusted_keys=trusted)
         result.setdefault("checked", 1)
         result.setdefault("linkage_complete", (receipts_in[0].get("payload", {})
                                               .get("chain") or {}).get("index") == 0)
     else:
-        result = receipts.verify_chain(receipts_in, require_root=args.require_root)
+        result = receipts.verify_chain(receipts_in, require_root=args.require_root,
+                                       trusted_keys=trusted)
 
     if args.json:
         print(json.dumps({"ok": result["ok"], **{k: v for k, v in result.items()
@@ -90,6 +112,13 @@ def main() -> int:
     print(f"chain: {'starts at index 0' if result.get('linkage_complete') else 'starts mid-ledger'}")
     if result.get("signed_by"):
         print(f"signed by: {result['signed_by']}")
+    if trusted is not None:
+        print(f"keys: pinned against {len(trusted)} published "
+              f"{'key' if len(trusted) == 1 else 'keys'} "
+              f"({', '.join(sorted(trusted))})")
+    elif result.get("checks", {}).get("key_status"):
+        print(f"key: {result['checks']['key_status']} (no --keys given, so this is "
+              f"the receipt's own claim about its signer)")
     if result["ok"]:
         print(f"OK: {result.get('reason', 'every receipt verified and linked')}")
         notes = result.get("note")

@@ -12,9 +12,12 @@ from pathlib import Path
 # Paths
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
+# The storage directory. Overridable because the offline receipt tooling
+# (scripts/rotate_receipt_key.py, scripts/verify_receipt.py) runs in its own
+# process and has to be pointed at a deployment's data dir explicitly.
+DATA_DIR = Path(os.getenv("AIOPS_DATA_DIR") or (PROJECT_ROOT / "data"))
 KNOWLEDGE_DIR = PROJECT_ROOT / "knowledge_base"
-DATA_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Storage backend

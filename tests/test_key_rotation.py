@@ -1,5 +1,10 @@
 """Key rotation: the past stays verifiable, the retired secret is gone.
 
+(The CLI sections at the bottom run the scripts as real subprocesses with
+AIOPS_DATA_DIR pointed at the isolated temp dir — rotation is an
+operational action, and an operational action that only works under
+pytest is not one.)
+
 Rotating a signing key is easy; the part worth testing is what rotation
 must *not* do. It must not invalidate the receipts already issued (they
 are evidence, and evidence does not expire because the operator rotated),
@@ -20,12 +25,15 @@ So the tests are written from the auditor's side of the transaction:
    silent one produces receipts that look signed and pin to nothing.
 """
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 from backend import config, ed25519, receipts  # noqa: E402
 
@@ -270,6 +278,109 @@ def test_pin_verifies_over_http_against_the_published_history(client):
     assert loose["ok"] is True
     assert loose["pinned"] is False
     assert before["payload"]["receipt_id"]  # still in the ledger, still verifiable
+
+
+# --------------------------------------------------------------------- CLI
+def _cli(*args: str, data_dir: Path | None = None, key: str | None = None):
+    env = dict(os.environ)
+    env.pop("AIOPS_RECEIPT_KEY", None)
+    if data_dir is not None:
+        env["AIOPS_DATA_DIR"] = str(data_dir)
+    if key is not None:
+        env["AIOPS_RECEIPT_KEY"] = key
+    return subprocess.run([sys.executable, "-m", *args], cwd=ROOT, env=env,
+                          capture_output=True, text=True)
+
+
+def test_the_rotation_cli_rotates_a_real_data_dir(client, tmp_path):
+    before = _receipt(client, "signed before the CLI ran")
+    data_dir = receipts.key_path().parent
+    history_out = tmp_path / "published_keys.json"
+
+    proc = _cli("scripts.rotate_receipt_key", "--json",
+                "--history-out", str(history_out), data_dir=data_dir)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    result = json.loads(proc.stdout)
+    assert result["ok"] is True
+    assert result["active_key"] != before["signature"]["public_key"]
+    assert result["retired_keys"] == [before["signature"]["key_id"]]
+
+    # The published history it wrote is what the offline verifier pins with.
+    trusted = receipts.trusted_keys_from(json.loads(history_out.read_text(encoding="utf-8")))
+    verdict = receipts.verify_receipt(before, trusted_keys=trusted)
+    assert verdict["ok"] is True
+    assert verdict["checks"]["key_status"] == "retired"
+
+    # And the running process picks up the new key on its next signature.
+    receipts._cache.update(path=None, seed=None)
+    assert ed25519.public_key(receipts.signing_seed()).hex() == result["active_key"]
+
+
+def test_the_rotation_cli_refuses_an_environment_managed_key(client):
+    proc = _cli("scripts.rotate_receipt_key", key="ab" * 32,
+                data_dir=receipts.key_path().parent)
+    assert proc.returncode == 2
+    assert "refused" in proc.stderr and "AIOPS_RECEIPT_KEY" in proc.stderr
+
+
+def test_the_verifier_pins_against_a_dropped_key_history(client, tmp_path):
+    before = _receipt(client)
+    receipts.rotate_key()
+    history_out = tmp_path / "published_keys.json"
+    history_out.write_text(json.dumps(receipts.key_history_document()), encoding="utf-8")
+
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text(json.dumps(before), encoding="utf-8")
+    pinned = _cli("scripts.verify_receipt", str(receipt_path),
+                  "--keys", str(history_out),
+                  data_dir=receipts.key_path().parent)
+    assert pinned.returncode == 0, pinned.stdout + pinned.stderr
+    assert "pinned against 2" in pinned.stdout
+
+
+def test_the_verifier_rejects_an_unpublished_signer(client, tmp_path):
+    """The forgery that passes every check except the one that matters:
+    a self-consistent receipt signed by a key nobody published."""
+    honest = _receipt(client)
+    forged = json.loads(json.dumps(honest))
+    other = bytes(range(32))
+    body = receipts.canonical_bytes(forged["payload"])
+    forged["payload_sha256"] = receipts._sha256(body)
+    forged["signature"] = {"alg": "ed25519",
+                           "key_id": ed25519.public_key(other).hex()[:16],
+                           "public_key": ed25519.public_key(other).hex(),
+                           "signature": ed25519.sign(other, body).hex()}
+    history_out = tmp_path / "published_keys.json"
+    history_out.write_text(json.dumps(receipts.key_history_document()), encoding="utf-8")
+
+    forged_path = tmp_path / "forged.json"
+    forged_path.write_text(json.dumps(forged), encoding="utf-8")
+    proc = _cli("scripts.verify_receipt", str(forged_path),
+                "--keys", str(history_out),
+                data_dir=receipts.key_path().parent)
+    assert proc.returncode == 1
+    assert "never published that key" in proc.stderr
+
+    # Without pinning the same file verifies — and says why that is all it means.
+    loose = _cli("scripts.verify_receipt", str(forged_path),
+                 data_dir=receipts.key_path().parent)
+    assert loose.returncode == 0
+    assert "unpublished" in loose.stdout
+
+
+def test_the_verifier_refuses_an_unusable_key_history(client, tmp_path):
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text(json.dumps(_receipt(client)), encoding="utf-8")
+    broken = tmp_path / "broken.json"
+    broken.write_text("{not json", encoding="utf-8")
+    empty = tmp_path / "empty.json"
+    empty.write_text(json.dumps({"keys": []}), encoding="utf-8")
+    data_dir = receipts.key_path().parent
+    for bad in (broken, empty):
+        proc = _cli("scripts.verify_receipt", str(receipt_path),
+                    "--keys", str(bad), data_dir=data_dir)
+        assert proc.returncode == 2, bad
+        assert "key history" in proc.stderr
 
 
 def test_rotation_over_http_is_an_admin_mutation(monkeypatch):
