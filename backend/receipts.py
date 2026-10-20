@@ -394,11 +394,70 @@ def receipt_for_run(run_id: str) -> dict | None:
 
 
 # ----------------------------------------------------------------- verification
-def verify_receipt(receipt: dict) -> dict:
+def trusted_keys_from(document: dict | list) -> dict:
+    """The pinning map, built from a published history.
+
+    Accepts the document the API serves ({"keys": [...]}), the raw registry
+    file, or a bare list of entries — an auditor should not have to know
+    which shape they were handed. Raises ValueError on anything that is not
+    a usable history; callers turn that into "bad input", not "failed".
+    """
+    entries = document.get("keys") if isinstance(document, dict) else document
+    if not isinstance(entries, list):
+        raise ValueError("key history must be a list of keys (or {\"keys\": [...]})")
+    trusted: dict[str, dict] = {}
+    for i, entry in enumerate(entries):
+        if not isinstance(entry, dict) or not entry.get("public_key"):
+            raise ValueError(f"key history entry {i} has no public_key")
+        try:
+            public = bytes.fromhex(str(entry["public_key"]))
+        except ValueError as exc:
+            raise ValueError(f"key history entry {i} public_key is not hex") from exc
+        if len(public) != ed25519.SEED_BYTES:
+            raise ValueError(f"key history entry {i} public_key is not 32 bytes")
+        normalised = dict(entry)
+        normalised.setdefault("key_id", public.hex()[:16])
+        trusted[normalised["key_id"]] = normalised
+    if not trusted:
+        raise ValueError("key history contains no keys")
+    return trusted
+
+
+def _key_status(public_hex: str,
+                entries: list[dict] | None) -> tuple[str, dict | None]:
+    """(status, entry) for a signing key against a history: active, retired
+    or unpublished. No history at all is "unpublished", never a pass."""
+    if not entries:
+        return "unpublished", None
+    for entry in entries:
+        if ((str(entry.get("public_key") or "").lower() == public_hex)
+                or entry.get("key_id") == public_hex[:16]):
+            return ("retired" if entry.get("retired_at") else "active"), entry
+    return "unpublished", None
+
+
+def _local_history_safe() -> list[dict] | None:
+    """The published history, best-effort: a verification must never raise
+    (or create files) because the local key state is unreadable."""
+    try:
+        return published_history()
+    except OSError:
+        return None
+
+
+def verify_receipt(receipt: dict, *,
+                   trusted_keys: dict[str, dict] | None = None) -> dict:
     """Check one receipt offline. Returns a verdict, never raises on bad input.
 
     `checks` is deliberately granular: "invalid" is not a useful thing to
     tell an auditor who is holding a receipt they believe is genuine.
+
+    `trusted_keys` (see trusted_keys_from) is what turns "this file is
+    self-consistent" into "this file was signed by a key that deployment
+    published": with it, a signature by any other key fails. Without it the
+    key's provenance is still reported — active, retired, unpublished — but
+    cannot fail the verdict, because a receipt dropped on its own carries
+    no history with it.
     """
     checks: dict[str, Any] = {}
     if not isinstance(receipt, dict):
@@ -449,16 +508,36 @@ def verify_receipt(receipt: dict) -> dict:
                 "reason": "signature does not verify for the embedded public key",
                 "checks": checks}
 
-    checks["key_id_matches"] = block.get("key_id") == public.hex()[:16]
+    public_hex = public.hex()
+    checks["key_id_matches"] = block.get("key_id") == public_hex[:16]
+
+    history = (trusted_keys.values() if trusted_keys is not None
+               else _local_history_safe())
+    status, _entry_matched = _key_status(public_hex, list(history) if history else None)
+    checks["key_trusted"] = trusted_keys is not None
+    checks["key_status"] = status  # active | retired | unpublished
+    if trusted_keys is not None and status == "unpublished":
+        return {"ok": False,
+                "reason": f"signed by key {public_hex[:16]}…, which is not in the "
+                          f"published key history — this deployment never "
+                          f"published that key",
+                "checks": checks}
+
     checks["run_id"] = payload.get("run_id")
     checks["disposition"] = payload.get("disposition")
-    checks["signed_by"] = public.hex()
+    checks["signed_by"] = public_hex
+    provenance = {"active": "the active published key",
+                  "retired": "a retired published key — rotated out, still in "
+                             "the key history, so this receipt still verifies",
+                  "unpublished": "the embedded key (no published history to "
+                                 "compare it against)"}[status]
     return {"ok": True,
-            "reason": "payload is intact and signed by the embedded key",
+            "reason": f"payload is intact and signed by {provenance}",
             "checks": checks}
 
 
-def verify_chain(receipts: list[dict], *, require_root: bool = False) -> dict:
+def verify_chain(receipts: list[dict], *, require_root: bool = False,
+                 trusted_keys: dict[str, dict] | None = None) -> dict:
     """Check a run of receipts: each signature, and each link to the previous.
 
     A received bundle often starts mid-ledger (someone exported the last ten
@@ -477,7 +556,7 @@ def verify_chain(receipts: list[dict], *, require_root: bool = False) -> dict:
     problems: list[dict] = []
     prev_sha = None
     for i, receipt in enumerate(receipts):
-        verdict = verify_receipt(receipt)
+        verdict = verify_receipt(receipt, trusted_keys=trusted_keys)
         if not verdict["ok"]:
             problems.append({"index": i, "problem": verdict["reason"]})
             continue
