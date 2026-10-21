@@ -68,6 +68,15 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   read like a pixel match.
 
 ### Added
+- **Backups you can prove are restorable** — `python -m scripts.backup` used to
+  tar the top level of `data/` and stop there, so anything nested was silently
+  omitted and nothing ever read the archive back. Snapshots now recurse, and
+  `--verify` re-opens one to count its records, refuse unparseable collections,
+  and refuse a snapshot holding only one half of the receipt signing identity
+  (seed without published history restores into a deployment that will not
+  sign). `--restore-to` extracts into an empty directory only and refuses
+  members that resolve outside it.
+### Added
 - **A visual gate for the dashboard** — `python -m scripts.visual_check`
   captures both themes and fails on drift, comparing three things because each
   catches what the others cannot: pixels (with a tolerance that separates
