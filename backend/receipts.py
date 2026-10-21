@@ -610,6 +610,12 @@ def verify_chain(receipts: list[dict], *, require_root: bool = False,
             problems.append({"index": i, "problem": "chain index is not sequential"})
         prev_sha = receipt["payload_sha256"]
 
+    # Which keys signed this bundle. A chain that spans a rotation is not
+    # suspicious — it is the normal case the rotation was designed for — but
+    # `signed_by` (the last receipt's key) would hide the fact that it did.
+    keys_used = sorted({str((r.get("signature") or {}).get("key_id"))
+                        for r in receipts if (r.get("signature") or {}).get("key_id")})
+
     starts_at = (receipts[0].get("payload", {}).get("chain") or {}).get("index")
     linkage_complete = starts_at == 0
     if not linkage_complete and require_root:
@@ -625,6 +631,8 @@ def verify_chain(receipts: list[dict], *, require_root: bool = False,
         "starts_at_index": starts_at,
         "head_sha256": receipts[-1].get("payload_sha256"),
         "signed_by": receipts[-1].get("signature", {}).get("public_key"),
+        "keys_used": keys_used,
+        "rotations_spanned": max(0, len(keys_used) - 1),
         "note": ("every signature verified" if not problems else
                  "see problems") + ("; this bundle does not include the start of "
                  "the chain, so deletion before it cannot be ruled out"

@@ -487,3 +487,19 @@ def test_check_exits_two_when_it_cannot_tell(monkeypatch, capsys):
 
     assert _run_cli(monkeypatch, ["--check"]) == 2
     assert "cannot check" in capsys.readouterr().err
+
+
+def test_a_bundle_spanning_a_rotation_names_both_keys(client):
+    """`signed_by` is the last receipt's key, which would make a bundle that
+    survived a rotation look like it was signed by one key throughout."""
+    from backend import receipts
+
+    first = _receipt(client, "before the rotation in the bundle")
+    assert client.post("/api/receipts/rotate-key").status_code == 200
+    second = _receipt(client, "after the rotation in the bundle")
+
+    verdict = receipts.verify_chain([first, second])
+
+    assert verdict["ok"] is True
+    assert verdict["rotations_spanned"] == 1
+    assert len(verdict["keys_used"]) == 2

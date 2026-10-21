@@ -144,6 +144,9 @@ def main() -> int:
     print(f"chain: {'starts at index 0' if result.get('linkage_complete') else 'starts mid-ledger'}")
     if result.get("signed_by"):
         print(f"signed by: {result['signed_by']}")
+    if len(result.get("keys_used") or []) > 1:
+        print(f"keys: {len(result['keys_used'])} distinct signing keys in this "
+              f"bundle, {result['rotations_spanned']} rotation(s) spanned")
     if trusted is not None:
         print(f"keys: pinned against {len(trusted)} published "
               f"{'key' if len(trusted) == 1 else 'keys'} "
