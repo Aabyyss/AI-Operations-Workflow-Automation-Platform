@@ -58,6 +58,14 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   row carried a disposition, risk or cost, and the thumbs and Replay buttons
   passed a ticket id to `/api/runs/{id}/...` — which 404s, which is why the
   quality gate had no feedback to count. Both fixed, with contract tests.
+- **The visual gate says which comparison it actually ran.**
+  `--allow-cross-platform` claimed to compare "tokens and inventory only"; it
+  skipped the platform guard and then diffed pixels and font-dependent boxes
+  anyway, so on any machine but the one that recorded the baseline it went red
+  for reasons the change under test had not caused. It now drops pixels and
+  geometry for real, keeps tokens, headings and card inventory exact, and its
+  pass line names the comparison — a passing gate that compared less must not
+  read like a pixel match.
 
 ### Added
 - **A visual gate for the dashboard** — `python -m scripts.visual_check`
@@ -71,7 +79,10 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   `1` drifted, `2` could not check; a check that could not run is never green.
   The PNG decoder, the tolerances and all three exit codes are tested in the
   normal suite, so the gate's own judgment is checked by something other than
-  the gate.
+  the gate. It now runs in CI on every push, and a failure keeps its evidence:
+  `--capture-dir` writes the screenshots and layout JSON where the caller asked
+  — uploaded as the `visual-capture` artifact — because a gate that fails with
+  only a list of strings is a gate nobody can argue with.
 - **Rotatable receipt keys with a published history** — `POST
   /api/receipts/rotate-key` (admin) or `python -m scripts.rotate_receipt_key`
   retires the active signing key into an append-only public history and drops
