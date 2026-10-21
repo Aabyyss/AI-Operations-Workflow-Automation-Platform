@@ -278,6 +278,13 @@ but it is not encrypted.
   retired. Verify with `--keys published_keys.json` to pin against a history
   the auditor obtained themselves; a receipt's embedded key still verifies on
   its own, but pinning is what tells them whose key it is.
+- **Rotation cadence:** `/api/health` → `checks.receipts` reports the active
+  key's age and turns the report `degraded` past
+  `AIOPS_RECEIPT_KEY_MAX_AGE_DAYS` (default 365; `0` disables the warning for a
+  key whose schedule lives somewhere else). `python -m
+  scripts.rotate_receipt_key --check` is the cron-sized version: `0` inside the
+  limit, `1` past it, `2` cannot tell (env-managed key, or nothing signed yet).
+  Nothing breaks if you ignore it — that is why it needs a clock.
 - **A run with no receipt** says so on the run record (`receipt_error`) and in
   the dashboard. Signing happens after the run is stored, so a signing failure
   never hides or discards a decision that was executed.
