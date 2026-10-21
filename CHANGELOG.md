@@ -68,6 +68,15 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   read like a pixel match.
 
 ### Added
+- **The signing key has an age, and something reads it** — rotation shipped as a
+  capability with no clock: a deployment could sign for years on one seed and
+  never be told. `/api/health` now reports `receipts` (signed decisions, active
+  key, published keys, key age) and turns `degraded` past
+  `AIOPS_RECEIPT_KEY_MAX_AGE_DAYS` (365 by default, `0` to disable);
+  `python -m scripts.rotate_receipt_key --check` gives cron the same answer as
+  exit codes — `0` inside the limit, `1` overdue, `2` unknowable, because a key
+  this process cannot date is an environment key, not an overdue one.
+### Added
 - **Backups you can prove are restorable** — `python -m scripts.backup` used to
   tar the top level of `data/` and stop there, so anything nested was silently
   omitted and nothing ever read the archive back. Snapshots now recurse, and
