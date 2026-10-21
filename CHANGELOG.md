@@ -68,6 +68,26 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   read like a pixel match.
 
 ### Added
+- **Receipts verify as an archive, and say how many keys signed it** —
+  `python -m scripts.verify_receipt <dir>` reads every receipt in a folder in
+  chain-index order, because exports are named after their run and a shell glob
+  therefore reported a good chain as broken — the fastest way to teach people
+  to ignore a verifier. Files named explicitly keep the order they were given,
+  since reordering those is a tampering case. Chain verification also reports
+  every distinct signing key and how many rotations a bundle spans, where
+  `signed_by` only ever showed the last receipt's key.
+- **The visual gate writes a verdict, and runs in CI** — `--report` emits the
+  result as JSON (mode, baseline platform, per-theme counts, whether pixels and
+  geometry were compared), uploaded on every run; `--capture-dir` keeps the
+  capture that failed the check. CI now fails a push on a changed design token,
+  a missing card or a reordered section.
+### Changed
+- **CLI output is UTF-8, not the console's codepage.** Every tool prints an
+  ellipsis or an arrow somewhere; on Windows those went out as cp1252 bytes,
+  so anything decoding the output as UTF-8 — our tests included — broke on a
+  correct message. A shared helper reconfigures the streams and degrades one
+  glyph where a terminal cannot render it.
+### Added
 - **The signing key has an age, and something reads it** — rotation shipped as a
   capability with no clock: a deployment could sign for years on one seed and
   never be told. `/api/health` now reports `receipts` (signed decisions, active
