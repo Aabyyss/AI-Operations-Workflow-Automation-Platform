@@ -184,3 +184,60 @@ def test_cli_reports_an_empty_bundle(tmp_path, bundle):
     proc = _cli(str(path))
     assert proc.returncode == 1
     assert "no receipts supplied" in proc.stderr
+
+
+# --------------------------------------------------------- verifying a folder
+def _export_receipts(client, tmp_path):
+    """Signed receipts, written out the way an operator would archive them."""
+    for subject in ("first", "second"):
+        t = {"customer_email": "a@b.com", "subject": subject,
+             "body": "You charged my card twice for $49, please refund one."}
+        run = client.post("/api/tickets", json=t).json()
+        path = tmp_path / f"receipt-{run['id']}.json"
+        path.write_bytes(client.get(f"/api/runs/{run['id']}/receipt.json").content)
+    return tmp_path
+
+
+def test_a_folder_of_receipts_is_verified_in_chain_order(client, tmp_path):
+    """Exported files are named after their run, so a shell glob orders them
+    arbitrarily — and a good chain then reports a broken link."""
+    folder = _export_receipts(client, tmp_path)
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "scripts.verify_receipt", str(folder)],
+        capture_output=True, cwd=str(ROOT))
+    out = proc.stdout.decode("utf-8")
+
+    assert proc.returncode == 0, proc.stderr.decode("utf-8")
+    assert "ordered by chain index" in out
+    assert "receipts checked: 2" in out
+    assert "index 0" in out and "index 1" in out
+
+
+def test_naming_the_files_keeps_the_order_they_were_given(client, tmp_path):
+    """Reordering by hand is tampering; the verifier must not quietly repair
+    it the way it repairs a folder's arbitrary filename order."""
+    folder = _export_receipts(client, tmp_path)
+    def index(path):
+        return json.loads(path.read_text(encoding="utf-8"))["payload"]["chain"]["index"]
+    files = sorted(folder.glob("*.json"), key=index, reverse=True)
+    assert len(files) == 2
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "scripts.verify_receipt", *[str(p) for p in files]],
+        capture_output=True, cwd=str(ROOT))
+
+    assert proc.returncode == 1
+    assert "chain broken" in proc.stderr.decode("utf-8")
+
+
+def test_an_empty_folder_is_bad_input_not_a_pass(client, tmp_path):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "scripts.verify_receipt", str(empty)],
+        capture_output=True, cwd=str(ROOT))
+
+    assert proc.returncode == 2
+    assert "no receipt JSON files" in proc.stderr.decode("utf-8")
