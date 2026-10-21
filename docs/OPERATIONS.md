@@ -278,6 +278,14 @@ but it is not encrypted.
   retired. Verify with `--keys published_keys.json` to pin against a history
   the auditor obtained themselves; a receipt's embedded key still verifies on
   its own, but pinning is what tells them whose key it is.
+- **Verify an archive, not a file:** `python -m scripts.verify_receipt <dir>`
+  reads every `*.json` in a folder in **chain order** (by `chain.index`, not by
+  filename — exports are named after their run, so a shell glob orders them
+  arbitrarily). Files named on the command line keep the order you gave them:
+  reordering those by hand is the tampering case the verifier is meant to
+  catch. The verdict also reports how many distinct signing keys the bundle
+  spans, so a run of receipts that crossed a rotation says so instead of
+  looking like one key throughout.
 - **Rotation cadence:** `/api/health` → `checks.receipts` reports the active
   key's age and turns the report `degraded` past
   `AIOPS_RECEIPT_KEY_MAX_AGE_DAYS` (default 365; `0` disables the warning for a
