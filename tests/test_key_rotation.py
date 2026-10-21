@@ -441,3 +441,49 @@ def test_a_rotated_key_resets_the_clock(monkeypatch):
          "created_at": "2026-01-01T00:00:00+00:00", "retired_at": None}])
 
     assert receipts.key_age_days(datetime(2026, 1, 3, tzinfo=timezone.utc)) == 2.0
+
+
+# ------------------------------------------------------- the cron-facing check
+def _run_cli(monkeypatch, argv):
+    import scripts.rotate_receipt_key as cli
+    monkeypatch.setattr(sys, "argv", ["rotate_receipt_key"] + argv)
+    return cli.main()
+
+
+def test_check_exits_zero_for_a_key_inside_the_limit(monkeypatch, capsys):
+    from backend import receipts
+    monkeypatch.setattr(receipts, "published_history", lambda: [
+        {"key_id": "k" * 16, "public_key": "cc" * 32,
+         "created_at": receipts.iso_now(), "retired_at": None}])
+    monkeypatch.setattr(receipts, "key_history", lambda: [
+        {"key_id": "k" * 16, "public_key": "cc" * 32,
+         "created_at": receipts.iso_now(), "retired_at": None}])
+    monkeypatch.setattr("backend.config.RECEIPT_KEY", "")
+    monkeypatch.setattr("backend.config.RECEIPT_KEY_MAX_AGE_DAYS", 365.0)
+
+    assert _run_cli(monkeypatch, ["--check"]) == 0
+    out = capsys.readouterr().out
+    assert "ok" in out
+
+
+def test_check_exits_one_when_rotation_is_overdue(monkeypatch, capsys):
+    from backend import receipts
+    old = {"key_id": "k" * 16, "public_key": "cc" * 32,
+           "created_at": "2020-01-01T00:00:00+00:00", "retired_at": None}
+    monkeypatch.setattr(receipts, "published_history", lambda: [old])
+    monkeypatch.setattr(receipts, "key_history", lambda: [old])
+    monkeypatch.setattr("backend.config.RECEIPT_KEY", "")
+    monkeypatch.setattr("backend.config.RECEIPT_KEY_MAX_AGE_DAYS", 365.0)
+
+    assert _run_cli(monkeypatch, ["--check"]) == 1
+    assert "ROTATE" in capsys.readouterr().out
+
+
+def test_check_exits_two_when_it_cannot_tell(monkeypatch, capsys):
+    """Unknown is not 'fine': a cron that reads an unanswerable question as a
+    pass never reports anything."""
+    from backend import receipts
+    monkeypatch.setattr("backend.config.RECEIPT_KEY", "dd" * 32)
+
+    assert _run_cli(monkeypatch, ["--check"]) == 2
+    assert "cannot check" in capsys.readouterr().err
