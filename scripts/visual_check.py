@@ -472,6 +472,9 @@ def main() -> int:
     ap.add_argument("--allow-cross-platform", action="store_true",
                     help="compare tokens/inventory only when the baseline was "
                          "captured on another platform")
+    ap.add_argument("--report", type=Path, metavar="PATH",
+                    help="write the verdict as JSON (what CI and a bot read; "
+                         "the exit code is the same answer for a human)")
     args = ap.parse_args()
 
     if args.current is not None and args.capture_dir is not None:
@@ -522,6 +525,20 @@ def main() -> int:
     problems, report = compare(BASELINE_DIR, png, metrics,
                               allow_cross_platform=args.allow_cross_platform)
     shots = sum(r["screenshots"] for r in report.values())
+    if args.report is not None:
+        # Written before the early return: a failure is the run someone wants
+        # to parse, so the report cannot only exist on the happy path.
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps({
+            "ok": not problems,
+            "problems": problems,
+            "mode": ("cross-platform" if args.allow_cross_platform else "full"),
+            "platform": sys.platform,
+            "baseline_platform": baseline.get("platform"),
+            "screenshots_compared": shots,
+            "themes": report,
+            "capture": str(workdir),
+        }, indent=1) + "\n", encoding="utf-8")
     if problems:
         print(f"VISUAL DRIFT ({len(problems)} problem(s); "
               f"{shots} screenshot(s) compared)", file=sys.stderr)
