@@ -47,6 +47,15 @@ jobs:
           curl -sf -o /tmp/receipt.json "http://localhost:8077/api/runs/$RUN/receipt.json"
           python -m scripts.verify_receipt /tmp/receipt.json
 
+      - name: Backup round-trip — snapshot, verify, restore
+        run: |
+          python -m scripts.backup --retention 2
+          SNAP=$(ls -t data_backups/*.tar.gz | head -1)
+          python -m scripts.backup --verify "$SNAP"
+          rm -rf /tmp/restored
+          python -m scripts.backup --snapshot "$SNAP" --restore-to /tmp/restored
+          test -f /tmp/restored/runs.json
+
   eval-quality:
     runs-on: ubuntu-latest
     steps:
