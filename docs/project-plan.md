@@ -34,7 +34,7 @@ in one working system.
 | 7 | Integrations + audit log | ✅ | JSONL audit with correlation IDs |
 | 8 | FastAPI + operator dashboard | ✅ | dashboard serves, analytics populate |
 | 9 | n8n bridge + Docker Compose | ✅ | importable workflow JSON, `compose up` |
-| 10 | Tests + CI (3.11–3.13) | ✅ | 46/46 green in GitHub Actions |
+| 10 | Tests + CI (3.11–3.13) | ✅ | the whole suite green in GitHub Actions, per version |
 | 11 | Postgres + pgvector behind `Storage` | ✅ | shipped as milestone 31 — same interface, migration script, opt-in |
 | 12 | Outbound n8n executor (outbox → real vendors) | ⬜ | dry-run replay mode |
 | 13 | Quality eval harness (labeled ticket set) | ✅ | `python -m scripts.eval_quality`: 8/8 routing accuracy, 100% escalation recall, CI `eval-quality` job |
@@ -64,8 +64,13 @@ in one working system.
 | 37 | Two-sided handoff labour in the cost comparison | ✅ | our measured escalations and the vendor's unbilled tickets priced at one rate; each plan carries bill and fully loaded cost, verdicts use the loaded figure, and the crossover flips from ceiling to floor when a human costs more than the meter |
 | 38 | One-pager provenance + drift gate | ✅ | `<name>.source.json` records inputs, ledger excerpt and digest; `--verify` re-renders and exits 1 on drift, so the committed buyer document cannot go stale in CI |
 | 39 | pgvector retrieval behind one interface | ✅ | `replace`/`search` over in-process cosine or pgvector `<=>`; TF-IDF remains the zero-config default and the runtime fallback; `--embeddings` fills the table during migration; `/ready` names the backend in use |
-| 40 | Automated visual regression for the dashboard | ✅ | `python -m scripts.visual_check` captures both themes and diffs pixels, card geometry and design tokens against `docs/screenshots/`; API responses are frozen so a diff measures the design, not today's numbers; exit 2 means the check could not run, never pass; 24 tests pin the PNG decoder, the tolerances and the exit codes — see `docs/OPERATIONS.md` §9 |
+| 40 | Automated visual regression for the dashboard | ✅ | `python -m scripts.visual_check` captures both themes and diffs pixels, card geometry and design tokens against `docs/screenshots/`; API responses are frozen so a diff measures the design, not today's numbers; exit 2 means the check could not run, never pass; 32 tests pin the PNG decoder, the tolerances, the report and the exit codes — see `docs/OPERATIONS.md` §9 |
 | 41 | Rotatable receipt keys with a published history | ✅ | `POST /api/receipts/rotate-key` retires the active key into `GET /api/receipts/key-history` and drops the secret, so old receipts report "signed by a retired published key" instead of failing; `--keys`/`pin=true` verifies against a history the auditor holds; the browser viewer shows the same provenance |
+| 42 | The visual gate runs in CI, and says what it compared | ✅ | a `visual` job on every push; `--allow-cross-platform` really skips pixels/geometry (it used to skip only the platform guard and diff fonts anyway); `--capture-dir` keeps the capture, `--report` writes the verdict as JSON, both uploaded as artifacts |
+| 43 | Backups you can prove are restorable | ✅ | snapshots recurse; `--verify` re-reads the archive, counts collections, refuses unparseable files and a half-copied signing identity; `--restore-to` extracts only into an empty directory and refuses members that escape it; CI round-trips one |
+| 44 | The signing key has a clock | ✅ | `/api/health` → `checks.receipts` reports key age and goes `degraded` past `AIOPS_RECEIPT_KEY_MAX_AGE_DAYS`; `scripts.rotate_receipt_key --check` gives cron 0/1/2; an env-managed key is never called overdue |
+| 45 | Receipt bundles verify as an archive | ✅ | `verify_receipt <dir>` reads a folder in chain-index order (a filename glob used to report a good chain as broken), reports how many signing keys the bundle spans, and keeps caller order for explicitly named files |
+| 46 | Operational hygiene that cannot drift silently | ✅ | retention excludes receipts by test, CLI output is UTF-8 on every console, README/plan/test counts match the suite |
 
 ## 3. Development roadmap (phases)
 
