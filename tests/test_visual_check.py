@@ -350,3 +350,51 @@ def test_the_geometry_switch_keeps_horizontal_overflow_out_of_the_verdict():
     """Overflow is measured in text metrics, so a cross-platform run cannot
     judge it — and must not look like it did."""
     assert vc.compare_metrics(_metrics(), _metrics(overflow_x=True), geometry=False) == []
+
+
+# ------------------------------------------------------------------- reporting
+def test_the_report_is_written_on_a_pass_and_on_a_failure(tmp_path, monkeypatch):
+    """CI reads this file, so it must exist for the run that failed — a report
+    written only on success documents nothing anyone needs."""
+    cap = tmp_path / "cap"
+    _write_capture(cap)
+    baseline = tmp_path / "baseline"
+    _baseline_from(cap, baseline)
+    monkeypatch.setattr(vc, "BASELINE_DIR", baseline)
+    report_path = tmp_path / "out" / "visual.json"
+
+    monkeypatch.setattr(sys, "argv", ["visual_check", "--current", str(cap),
+                                     "--report", str(report_path)])
+    assert vc.main() == 0
+    passed = json.loads(report_path.read_text(encoding="utf-8"))
+    assert passed["ok"] is True and passed["problems"] == []
+    assert passed["mode"] == "full"
+    assert passed["screenshots_compared"] == 2
+    assert passed["themes"]["dark"]["pixels"] is True
+
+    _write_capture(cap, png_colour=(0, 0, 0, 255))
+    assert vc.main() == 1
+    failed = json.loads(report_path.read_text(encoding="utf-8"))
+    assert failed["ok"] is False
+    assert any("dash-dark-full.png" in p for p in failed["problems"])
+
+
+def test_a_cross_platform_report_says_what_it_did_not_compare(tmp_path, monkeypatch):
+    cap = tmp_path / "cap"
+    _write_capture(cap)
+    baseline = tmp_path / "baseline"
+    _baseline_from(cap, baseline)
+    doc = json.loads((baseline / "layout-baseline.json").read_text(encoding="utf-8"))
+    doc["platform"] = "darwin"
+    (baseline / "layout-baseline.json").write_text(json.dumps(doc), encoding="utf-8")
+    monkeypatch.setattr(vc, "BASELINE_DIR", baseline)
+    report_path = tmp_path / "visual.json"
+
+    monkeypatch.setattr(sys, "argv", ["visual_check", "--current", str(cap),
+                                     "--allow-cross-platform", "--report", str(report_path)])
+    assert vc.main() == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["mode"] == "cross-platform"
+    assert report["baseline_platform"] == "darwin"
+    assert report["themes"]["dark"]["pixels"] is False
+    assert report["themes"]["dark"]["geometry"] is False
