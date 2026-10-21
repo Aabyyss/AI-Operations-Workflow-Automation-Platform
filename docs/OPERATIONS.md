@@ -229,6 +229,33 @@ than failing, so this check is the only place the difference is visible.
 `--embeddings` refuses to run without a key instead of leaving an empty
 table, because an empty index reads to the pipeline as "no policy matched".
 
+### 7.2 Backup and restore
+
+```bash
+python -m scripts.backup                       # snapshot data/ now, prune to 14
+python -m scripts.backup --list                # what exists, oldest first
+python -m scripts.backup --verify SNAPSHOT     # exit 1 if it cannot be restored
+python -m scripts.backup --snapshot SNAPSHOT --restore-to /tmp/restore
+```
+
+`--verify` is the part that matters: it reads the archive back, counts the
+records per collection, and refuses a snapshot where any JSON file will not
+parse or where only one half of the receipt signing identity survived
+(`receipt_signing_key.json` without `receipt_keys.json`, or the reverse).
+Restoring half of that pair gives you a deployment that refuses to sign and
+cannot say why. Run `--verify` from cron on the newest snapshot: a backup
+nobody opened is a hope.
+
+Restore never writes over live data. `--restore-to` requires an empty
+directory, extracts under it, and refuses archive members that resolve
+outside it. Moving the files into `data/` is then a human step — stop the
+API first, keep the previous `data/` until you have checked `/api/health`
+and `GET /api/receipts/verify` on the restored store.
+
+Snapshots include `receipt_signing_key.json`, which is a secret. Treat the
+backup directory with the same care as `data/` itself; it is ignored by git
+but it is not encrypted.
+
 ## 8. Receipts and shadow mode
 
 - **Export a receipt:** `GET /api/runs/<run_id>/receipt.json` (the dashboard's
