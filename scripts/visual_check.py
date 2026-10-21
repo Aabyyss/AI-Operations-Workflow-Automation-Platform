@@ -4,6 +4,7 @@
     python -m scripts.visual_check              # capture, then compare
     python -m scripts.visual_check --update     # accept the current look
     python -m scripts.visual_check --no-capture --current DIR
+    python -m scripts.visual_check --capture-dir build/visual   # keep the shots
     python -m scripts.visual_check --allow-cross-platform
 
 What is compared, and why each one is a different kind of check:
@@ -437,6 +438,10 @@ def main() -> int:
     ap.add_argument("--current", type=Path, default=None,
                     help="compare this capture instead of running one "
                          "(expects png/ and metrics/ inside)")
+    ap.add_argument("--capture-dir", type=Path, default=None,
+                    help="capture into this directory and keep it (default: a "
+                         "temp dir) — how a failing CI run keeps the "
+                         "screenshots that failed it")
     ap.add_argument("--no-capture", action="store_true",
                     help="alias for --current without a fresh capture")
     ap.add_argument("--url", default=None,
@@ -448,9 +453,18 @@ def main() -> int:
                          "captured on another platform")
     args = ap.parse_args()
 
+    if args.current is not None and args.capture_dir is not None:
+        ap.error("--capture-dir captures; combine it with a comparison, not "
+                 "--current")
+
     workdir = args.current
-    if workdir is None:
-        workdir = Path(tempfile.mkdtemp(prefix="visual-check-"))
+    captured = workdir is None
+    if captured:
+        # --capture-dir is the same capture, kept where the caller asked. A
+        # gate whose failure leaves nothing behind can only be argued with,
+        # not inspected.
+        workdir = args.capture_dir or Path(tempfile.mkdtemp(prefix="visual-check-"))
+        workdir.mkdir(parents=True, exist_ok=True)
         try:
             info = capture(workdir, url=args.url, rerecord=args.rerecord)
         except RuntimeError as exc:
@@ -494,6 +508,8 @@ def main() -> int:
             print(f"  - {problem}", file=sys.stderr)
         print("\nIf the change is intended: python -m scripts.visual_check --update",
               file=sys.stderr)
+        if captured:
+            print(f"the screenshots that failed this check: {workdir}", file=sys.stderr)
         return 1
     print(f"ok: {shots} screenshots and {len(THEMES)} layouts match the baseline")
     return 0

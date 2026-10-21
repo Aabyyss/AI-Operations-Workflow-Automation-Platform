@@ -239,3 +239,57 @@ def test_the_stale_baseline_image_is_removed_on_update(tmp_path):
     vc.update_baseline(baseline, cap / "png", cap / "metrics", sys.platform)
     assert not (baseline / "dash-dark-removed-card.png").exists()
     assert (baseline / "dash-dark-full.png").exists()
+
+
+def test_capture_dir_keeps_the_screenshots_the_gate_compared(tmp_path, monkeypatch, capsys):
+    """The failure has to be inspectable: CI uploads this directory, and a
+    human opening a diff needs the PNG that produced it, not a temp path that
+    vanished with the process."""
+    cap = tmp_path / "cap"
+
+    def fake_capture(dest, url=None, rerecord=False):
+        _write_capture(dest)
+        return {"png": dest / "png", "metrics": dest / "metrics", "log": ""}
+
+    monkeypatch.setattr(vc, "capture", fake_capture)
+    monkeypatch.setattr(vc, "BASELINE_DIR", tmp_path / "baseline")
+
+    monkeypatch.setattr(sys, "argv",
+                        ["visual_check", "--update", "--capture-dir", str(cap)])
+    assert vc.main() == 0
+    assert (cap / "png" / "dash-dark-full.png").exists()
+    assert (cap / "metrics" / "layout-bright.json").exists()
+
+    # The kept capture is then compared against the baseline it just wrote.
+    monkeypatch.setattr(sys, "argv",
+                        ["visual_check", "--capture-dir", str(cap)])
+    assert vc.main() == 0
+    assert "match the baseline" in capsys.readouterr().out
+
+
+def test_a_drifted_capture_dir_is_named_in_the_failure(tmp_path, monkeypatch, capsys):
+    cap = tmp_path / "cap"
+    _write_capture(cap)
+    baseline = tmp_path / "baseline"
+    _baseline_from(cap, baseline)
+    monkeypatch.setattr(vc, "BASELINE_DIR", baseline)
+
+    def fake_capture(dest, url=None, rerecord=False):
+        _write_capture(dest, png_colour=(10, 10, 10, 255))
+        return {"png": dest / "png", "metrics": dest / "metrics", "log": ""}
+
+    monkeypatch.setattr(vc, "capture", fake_capture)
+    monkeypatch.setattr(sys, "argv",
+                        ["visual_check", "--capture-dir", str(cap)])
+    assert vc.main() == 1
+    assert str(cap) in capsys.readouterr().err
+
+
+def test_keeping_a_capture_and_comparing_an_existing_one_are_exclusive(monkeypatch):
+    """--current says "do not capture"; --capture-dir says "capture here".
+    Silently honouring one would make the other a lie in the log."""
+    monkeypatch.setattr(sys, "argv", ["visual_check", "--current", "x",
+                                     "--capture-dir", "y"])
+    with pytest.raises(SystemExit) as exc:
+        vc.main()
+    assert exc.value.code != 0
