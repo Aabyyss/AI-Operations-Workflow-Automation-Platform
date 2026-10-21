@@ -269,6 +269,20 @@ table, because an empty index reads to the pipeline as "no policy matched".
 - Exit codes are the contract: `0` matches, `1` drifted, `2` could not check
   (no baseline, no browser, no server). A check that could not run is never
   green.
+- `--capture-dir DIR` keeps the capture instead of using a temp directory, and
+  a drift report names it. Use it whenever the result will be looked at by
+  someone else — locally after a diff you did not expect, and in CI, where the
+  directory is uploaded as the `visual-capture` artifact.
+- `--allow-cross-platform` is for a baseline recorded on another machine. It
+  compares the parts that transfer — design tokens, section headings, the card
+  inventory and its order — and skips pixels and card geometry, because fonts
+  rasterise differently on macOS, Windows and Linux. It never excuses a token
+  change, and the success line says which comparison ran so the log cannot be
+  mistaken for a pixel-clean one. The committed baseline was recorded on
+  Windows (`layout-baseline.json` → `platform`), which is why CI runs the gate
+  this way; re-record on the platform you care about to get pixels back.
+- CI runs it on every push (the `visual` job): a missing card or a changed
+  token fails the build, and the capture comes back with the failure.
 - Captures replay the frozen API responses in `docs/screenshots/fixtures/`, so
   a diff measures the design and not today's numbers; `--rerecord` refreshes
   them deliberately, in their own commit.
