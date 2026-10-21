@@ -34,6 +34,7 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -219,6 +220,38 @@ def signing_seed() -> bytes:
     _cache["path"] = str(path)
     _cache["seed"] = seed
     return seed
+
+
+def key_age_days(now: datetime | None = None) -> float | None:
+    """How long the active key has been serving, or None when that is unknowable.
+
+    None covers the two honest answers: an `AIOPS_RECEIPT_KEY` this process was
+    handed (no creation date to read) and a deployment that has never signed
+    (no history yet). Neither is zero — reporting 0 would say "freshly rotated"
+    about a key nobody can date.
+
+    Reads the *published* history, which never creates a file: this is called
+    from /api/health, where writing a key would be a side effect of asking.
+    """
+    try:
+        entries = published_history()
+    except OSError:
+        return None
+    if not entries or not entries[-1].get("created_at"):
+        return None
+    created = _parse_ts(entries[-1]["created_at"])
+    if created is None:
+        return None
+    moment = now or datetime.now(timezone.utc)
+    return round((moment - created).total_seconds() / 86400.0, 2)
+
+
+def _parse_ts(value: str) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 def public_key_hex() -> str:

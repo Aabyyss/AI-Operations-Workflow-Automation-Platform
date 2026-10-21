@@ -78,6 +78,11 @@ SHADOW_MODE = os.getenv("AIOPS_SHADOW", "0").strip().lower() in ("1", "true", "y
 # once into DATA_DIR/receipt_signing_key.json (fine for a demo, not for a
 # deployment that has to prove who signed).
 RECEIPT_KEY = os.getenv("AIOPS_RECEIPT_KEY", "")
+# How long a receipt signing key may serve before health calls it due for
+# rotation. Rotation already kept every old receipt verifiable; this is the
+# number that turns "we should rotate" from memory into a report. 0 disables
+# the warning (an externally managed key with its own schedule).
+RECEIPT_KEY_MAX_AGE_DAYS = float(os.getenv("AIOPS_RECEIPT_KEY_MAX_AGE_DAYS", "365"))
 # Shared secret used to verify HMAC-SHA256 signatures on the n8n intake
 # webhook. Unset = signatures are accepted but not enforced.
 WEBHOOK_SECRET = os.getenv("AIOPS_WEBHOOK_SECRET", "")

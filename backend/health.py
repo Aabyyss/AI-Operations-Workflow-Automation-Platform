@@ -63,6 +63,11 @@ def health_report() -> dict:
         "heavy_model": config.HEAVY_MODEL,
     }
 
+    # Decision receipts: is the deployment's evidence still being signed by a
+    # key young enough to be believed to exist? Rotation keeps old receipts
+    # verifiable, so nothing forces it — which is exactly why it needs a clock.
+    checks["receipts"] = receipts_snapshot()
+
     # Budget posture (mirrors /api/analytics/budget without recomputing spend here).
     budget = budget_snapshot()
     checks["budget"] = budget
@@ -77,6 +82,54 @@ def health_report() -> dict:
         "degraded": degraded,
         "errors": errors,
     }
+
+
+def receipts_snapshot() -> dict:
+    """Receipt signing state, including the rotation clock.
+
+    `managed_by` says where the key came from, because that is what decides
+    whether this deployment can rotate it at all: an environment key is
+    rotated outside, and reporting it as "due" here would be advice nobody
+    can act on.
+    """
+    from . import receipts
+
+    max_age = float(getattr(config, "RECEIPT_KEY_MAX_AGE_DAYS", 365) or 0)
+    try:
+        age = receipts.key_age_days()
+        entries = receipts.published_history() or []
+    except Exception as exc:  # noqa: BLE001 — health must not 500 on key state
+        return {"status": "error", "error": str(exc)}
+
+    env_managed = bool((config.RECEIPT_KEY or "").strip())
+    reported = {
+        "signed": len(storage.all("receipts")),
+        "active_key_id": entries[-1].get("key_id") if entries else None,
+        "published_keys": len(entries),
+        "key_age_days": age,
+        "managed_by": "environment" if env_managed else "file",
+        "rotation_due_after_days": max_age or None,
+    }
+    if age is None:
+        # No history yet, or an environment key we cannot date. Say which, but
+        # never call it due: an unknown age is not an overdue one.
+        reported["status"] = "ok"
+        reported["rotation_due"] = False
+        reported["note"] = ("AIOPS_RECEIPT_KEY is managed outside this "
+                            "deployment; age is not observable here"
+                            if env_managed else "no receipts signed yet")
+        return reported
+
+    due = bool(max_age) and age > max_age
+    reported["status"] = "degraded" if due else "ok"
+    reported["rotation_due"] = due
+    if due:
+        reported["note"] = (f"the active signing key is {age:.0f} days old "
+                            f"(rotation due after {max_age:.0f}); rotate with "
+                            f"`python -m scripts.rotate_receipt_key` — old "
+                            f"receipts keep verifying against the published "
+                            f"history")
+    return reported
 
 
 def budget_snapshot() -> dict:
