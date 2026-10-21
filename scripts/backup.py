@@ -30,6 +30,7 @@ from pathlib import Path
 # Make `python -m scripts.backup` work from the repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from scripts.console import use_utf8  # noqa: E402
 from backend import config  # noqa: E402
 
 STAMP_FMT = "%Y%m%d-%H%M%S"
@@ -198,6 +199,7 @@ def list_snapshots(dest_dir: Path | None = None) -> list[tuple[Path, int]]:
 
 
 def main() -> int:
+    use_utf8()
     ap = argparse.ArgumentParser(description="Snapshot and prune the JSON store.")
     ap.add_argument("--retention", type=int, default=14,
                     help="snapshots to keep (default 14)")

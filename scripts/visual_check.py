@@ -47,6 +47,8 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
 
+from scripts.console import use_utf8  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE_DIR = ROOT / "docs" / "screenshots"
 BASELINE_FILE = BASELINE_DIR / "layout-baseline.json"
@@ -452,6 +454,7 @@ def update_baseline(baseline_dir: Path, current_png: Path, current_metrics: Path
 
 
 def main() -> int:
+    use_utf8()
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update", action="store_true",

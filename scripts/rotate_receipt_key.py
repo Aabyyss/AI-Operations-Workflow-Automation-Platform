@@ -34,6 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from scripts.console import use_utf8  # noqa: E402
 from backend import receipts  # noqa: E402
 
 
@@ -70,6 +71,7 @@ def _check() -> int:
 
 
 def main() -> int:
+    use_utf8()
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--json", action="store_true",

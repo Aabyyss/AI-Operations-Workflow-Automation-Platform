@@ -5,6 +5,7 @@
     python -m scripts.verify_receipt receipts/*.json          # a chain
     python -m scripts.verify_receipt bundle.json --require-root --json
     python -m scripts.verify_receipt receipt.json --keys published_keys.json
+    python -m scripts.verify_receipt exports/                   # a folder, in chain order
 
 What this proves:
   * the payload is exactly what was signed (sha256 of its canonical form),
@@ -30,6 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from scripts.console import use_utf8  # noqa: E402
 from backend import receipts  # noqa: E402
 
 
@@ -41,6 +43,26 @@ def _load(path: Path) -> list[dict]:
     if isinstance(data, list):
         return data
     return [data]
+
+
+def _chain_index(receipt: dict) -> int:
+    index = ((receipt.get("payload") or {}).get("chain") or {}).get("index")
+    return index if isinstance(index, int) else 10 ** 9
+
+
+def _from_directory(folder: Path) -> list[dict]:
+    """Every receipt in a folder, ordered by chain index — not by filename.
+
+    Exported receipts are named after their run, so a shell glob orders them
+    arbitrarily and a perfectly good chain then reports a broken link. Files
+    named on the command line keep the caller's order on purpose: reordering
+    them by hand is one of the tampering cases the verifier is supposed to
+    catch.
+    """
+    collected: list[dict] = []
+    for path in sorted(folder.glob("*.json")):
+        collected.extend(_load(path))
+    return sorted(collected, key=_chain_index)
 
 
 def _describe(receipt: dict) -> str:
@@ -55,6 +77,7 @@ def _describe(receipt: dict) -> str:
 
 
 def main() -> int:
+    use_utf8()
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("files", nargs="+", type=Path,
@@ -83,12 +106,18 @@ def main() -> int:
             return 2
 
     receipts_in: list[dict] = []
+    directories = [p for p in args.files if p.is_dir()]
     for path in args.files:
         try:
-            receipts_in.extend(_load(path))
+            receipts_in.extend(_from_directory(path) if path.is_dir()
+                               else _load(path))
         except (OSError, json.JSONDecodeError) as exc:
             print(f"error: cannot read {path}: {exc}", file=sys.stderr)
             return 2
+    if directories and not receipts_in:
+        print(f"error: no receipt JSON files in {', '.join(str(d) for d in directories)}",
+              file=sys.stderr)
+        return 2
 
     if len(receipts_in) == 1 and not args.require_root:
         # One receipt is the common case: report its own verdict without
@@ -106,6 +135,9 @@ def main() -> int:
                                                  if k != "ok"}}, indent=1))
         return 0 if result["ok"] else 1
 
+    if directories:
+        print(f"read {len(receipts_in)} receipt(s) from "
+              f"{', '.join(str(d) for d in directories)}, ordered by chain index")
     print(f"receipts checked: {result.get('checked', len(receipts_in))}")
     for receipt in receipts_in:
         print(_describe(receipt))
