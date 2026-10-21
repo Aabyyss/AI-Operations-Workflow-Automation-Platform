@@ -76,8 +76,24 @@ tests assert the *retrieval index* reflects the change, not just the file.
 
 | Job | What it does |
 |---|---|
-| `tests` (3.11 / 3.12 / 3.13) | full pytest suite per version, `fail-fast: false` so one version failing doesn't cancel the others |
+| `test` (3.11 / 3.12 / 3.13) | full pytest suite per version, `fail-fast: false` so one version failing doesn't cancel the others; then the one-pager drift check, an API boot smoke test (ticket → receipt → offline verify), and a backup round trip (snapshot → `--verify` → restore) |
 | `eval-quality` | `python -m scripts.eval_quality` — routing accuracy + escalation recall as a release gate |
+| `visual` | `python -m scripts.visual_check --allow-cross-platform` — design tokens, headings and card inventory against `docs/screenshots/`; the capture and the JSON verdict come back as artifacts |
+
+### 5.1 What cannot run in the pytest job
+
+Three suites need a browser, a server or both. They are marked and skipped
+with a reason, never silently passed:
+
+| Suite | Needs | Run it with |
+|---|---|---|
+| `tests/test_receipt_viewer.py` browser cases | Chrome via `playwright-core` | `npm install --no-save playwright-core`, then `pytest tests/test_receipt_viewer.py` |
+| `tests/test_visual_check.py` capture path | Chrome + a free port (the checker starts its own server) | `python -m scripts.visual_check` |
+| the visual baseline itself | the platform that recorded `layout-baseline.json` | re-record with `--update` on that platform |
+
+A skip is honest here because the *comparator* is still tested without a
+browser; what is skipped is the capture, and the visual job exercises that on
+Linux every push.
 
 Concurrency cancellation is on: pushing again cancels the superseded
 run. The badge in the README is the suite, not a subset.
