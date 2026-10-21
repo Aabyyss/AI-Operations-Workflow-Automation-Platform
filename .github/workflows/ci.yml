@@ -61,3 +61,36 @@ jobs:
         env:
           AIOPS_MODE: mock
         run: python -m scripts.eval_quality
+
+  visual:
+    # The dashboard's look is an artifact like any other: this job fails when
+    # a card disappears, a design token changes, or a section reorders. It
+    # records on ubuntu-latest while the committed baseline was recorded on
+    # the maintainer's machine, so it runs --allow-cross-platform, which
+    # compares tokens, headings and card inventory exactly and skips the
+    # pixel/geometry comparison those do not survive. A capture of the real
+    # pixels is uploaded when the job fails, so the reviewer sees the page.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Install headless Chromium
+        run: |
+          npm install --no-save playwright-core
+          npx playwright-core install --with-deps chromium
+      - name: Visual check — tokens, headings and card inventory vs docs/screenshots
+        env:
+          AIOPS_MODE: mock
+        run: python -m scripts.visual_check --allow-cross-platform --capture-dir build/visual
+      - name: Keep the capture that failed the check
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-capture
+          path: build/visual
+          if-no-files-found: warn
