@@ -127,3 +127,47 @@ in [GOVERNANCE.md](GOVERNANCE.md); storage shapes in
 - **Context:** live mode rebuilt embeddings in memory on every boot, and the Postgres backend shipped a pgvector schema nothing read. A deployment could therefore believe it was on semantic retrieval while serving keyword search, and an embeddings outage could take ticket handling down entirely.
 - **Decision:** `backend/vectors.py` puts `replace(chunks, vectors)` and `search(vector, k)` behind one interface with two implementations — in-process cosine, or pgvector's `<=>` (converted back to a similarity so one threshold means the same thing) — and `rag.py` always fits TF-IDF first, treating vectors as an upgrade it will fall back from on any error. `/ready` reports which backend is actually serving. `--embeddings` on the migration script fills the table once, and refuses loudly when there is no model rather than leaving an empty index that reads as "no policy matched".
 - **Consequence:** zero-config stays zero-config, a provider outage degrades quality instead of availability, and "we are on semantic search" is a claim the readiness probe can substantiate. Cost: two retrieval paths must keep returning the same shape, and pgvector needs the extension, the driver and a DSN before it can be used at all.
+
+## D21 · Evidence outlives the deployment that made it
+
+- **Context:** two features that keep the past trustworthy were quietly
+  unguarded. Retention pruned every collection it was told about, and a signed
+  receipt is not an operational record — someone else holds a copy, plus its
+  chain link, so pruning this deployment's copy breaks a verification the
+  auditor performs on their own machine. Meanwhile backups ran on a schedule
+  and nothing had ever read one back: a truncated archive, or a snapshot
+  holding the signing seed without the published history, looked exactly like a
+  good backup until the day it was needed.
+- **Decision:** `receipts` stays out of `COLLECTION_LIMITS`, and a test prunes
+  every covered collection to zero to prove it. Snapshots recurse (the old
+  top-level walk silently omitted anything in a subdirectory) and `--verify`
+  reopens one to count collections, refuse unparseable JSON, and refuse a
+  snapshot holding only one half of the seed/published-history pair — restoring
+  half leaves a deployment that will not sign and cannot say why. `--restore-to`
+  extracts only into an empty directory, resolves every member under it, and
+  leaves the final move into `data/` to a human.
+- **Consequence:** "we have backups" becomes a claim CI checks on every push,
+  and evidence cannot be lost to a retention run. Cost: snapshots carry a
+  secret (the signing seed) and need the care of `data/` itself, and restore is
+  deliberately two steps rather than one command that can overwrite live data.
+
+## D22 · A capability with no clock is a capability nobody uses
+
+- **Context:** key rotation shipped as an operation with no schedule and no
+  signal. Everything about it was designed so rotation is safe — old receipts
+  verify against the published history and report themselves as retired — and
+  that safety is exactly why forgetting it is easy: nothing breaks, so nothing
+  reminds you.
+- **Decision:** the active key's age is reported where an operator already
+  looks (`/api/health` → `checks.receipts`), the report turns `degraded` past
+  `AIOPS_RECEIPT_KEY_MAX_AGE_DAYS` (365 by default, `0` disables), and
+  `scripts/rotate_receipt_key --check` gives cron the same answer as exit codes:
+  `0` inside the limit, `1` overdue, `2` cannot tell. Age is read from the
+  published history, which never writes a file — asking for health must not
+  create a key. A key supplied through `AIOPS_RECEIPT_KEY` is reported as
+  `managed_by: environment` and is never called overdue: it cannot be dated
+  here, and rotating it is not this deployment's decision.
+- **Consequence:** the policy ("rotate yearly") is now something the system can
+  observe and a monitor can page on, and "cannot tell" is a distinct answer
+  rather than a silent pass. Cost: one more threshold to set, and the honest
+  admission that an env-managed key's age is invisible to this process.
