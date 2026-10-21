@@ -17,3 +17,6 @@ tmp_*.js
 # a kept capture from `python -m scripts.visual_check --capture-dir build/visual`
 # (local inspection and the CI artifact — never source)
 build/
+
+# local backup snapshots (scripts/backup.py)
+data_backups/
