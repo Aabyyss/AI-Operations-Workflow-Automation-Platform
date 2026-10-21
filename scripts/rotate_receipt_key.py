@@ -20,7 +20,10 @@ still verifies; a verifier pinning against the published history sees
 Refuses to run when AIOPS_RECEIPT_KEY is set: that key belongs to the
 environment, and rotating the file would not change what signs.
 
-Exit codes: 0 rotated, 2 refused (env-managed key, unreadable state).
+    python -m scripts.rotate_receipt_key --check     # cron: 0 ok, 1 overdue, 2 unknown
+
+Exit codes: 0 rotated, 2 refused (env-managed key, unreadable state); with
+--check: 0 within the age limit, 1 past it, 2 cannot tell.
 """
 from __future__ import annotations
 
@@ -34,6 +37,38 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from backend import receipts  # noqa: E402
 
 
+def _check() -> int:
+    """Age report for cron: 0 fine, 1 overdue, 2 cannot tell.
+
+    "Cannot tell" is its own exit code for the same reason it is in the visual
+    gate: a cron job that treats an unanswerable question as a pass is a cron
+    job that never tells you anything.
+    """
+    from backend import config
+
+    limit = float(getattr(config, "RECEIPT_KEY_MAX_AGE_DAYS", 365) or 0)
+    if (config.RECEIPT_KEY or "").strip():
+        print("cannot check: AIOPS_RECEIPT_KEY is managed outside this "
+              "deployment, so its age is not observable here", file=sys.stderr)
+        return 2
+    age = receipts.key_age_days()
+    if age is None:
+        print("cannot check: no published key history yet (nothing has been "
+              "signed by this deployment)", file=sys.stderr)
+        return 2
+    active = (receipts.key_history() or [{}])[-1].get("key_id")
+    if not limit:
+        print(f"active key {active} is {age:.0f} day(s) old; rotation warnings "
+              f"are disabled (AIOPS_RECEIPT_KEY_MAX_AGE_DAYS=0)")
+        return 0
+    due = age > limit
+    print(f"active key {active} is {age:.0f} day(s) old "
+          f"(limit {limit:.0f}): {'ROTATE' if due else 'ok'}")
+    if due:
+        print("rotate with: python -m scripts.rotate_receipt_key", file=sys.stderr)
+    return 1 if due else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -42,7 +77,13 @@ def main() -> int:
     ap.add_argument("--history-out", type=Path, metavar="PATH",
                     help="also write the publishable key history to this file "
                          "(what an auditor passes to verify_receipt --keys)")
+    ap.add_argument("--check", action="store_true",
+                    help="report the active key's age instead of rotating; "
+                         "exit 1 when it is past AIOPS_RECEIPT_KEY_MAX_AGE_DAYS")
     args = ap.parse_args()
+
+    if args.check:
+        return _check()
 
     before = receipts.public_key_hex()
     try:
