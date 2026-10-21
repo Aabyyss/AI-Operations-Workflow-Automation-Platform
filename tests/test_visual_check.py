@@ -293,3 +293,60 @@ def test_keeping_a_capture_and_comparing_an_existing_one_are_exclusive(monkeypat
     with pytest.raises(SystemExit) as exc:
         vc.main()
     assert exc.value.code != 0
+
+
+def _shift_cards(folder):
+    """Move the second card 160px down, as a different font stack would."""
+    for theme in ("dark", "bright"):
+        path = folder / "metrics" / f"layout-{theme}.json"
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        doc["cards"][1]["box"] = [10, 400, 300, 120]
+        path.write_text(json.dumps(doc), encoding="utf-8")
+
+
+def test_cross_platform_skips_pixels_and_boxes_but_never_tokens(tmp_path, monkeypatch,
+                                                               capsys):
+    """--allow-cross-platform is the flag a CI running on Linux uses against a
+    baseline recorded on Windows. It used to skip only the platform check and
+    then diff fonts anyway; it must compare what actually transfers."""
+    cap = tmp_path / "cap"
+    _write_capture(cap)
+    baseline = tmp_path / "baseline"
+    _baseline_from(cap, baseline)
+    doc = json.loads((baseline / "layout-baseline.json").read_text(encoding="utf-8"))
+    doc["platform"] = "darwin"
+    (baseline / "layout-baseline.json").write_text(json.dumps(doc), encoding="utf-8")
+    monkeypatch.setattr(vc, "BASELINE_DIR", baseline)
+
+    monkeypatch.setattr(sys, "argv", ["visual_check", "--current", str(cap)])
+    assert vc.main() == 2                    # without the flag: cannot check
+
+    # Another rasteriser's colours, another font stack's boxes.
+    _write_capture(cap, png_colour=(10, 10, 10, 255))
+    _shift_cards(cap)
+    monkeypatch.setattr(sys, "argv", ["visual_check", "--current", str(cap),
+                                     "--allow-cross-platform"])
+    assert vc.main() == 0
+    assert "tokens, headings, card inventory" in capsys.readouterr().out
+
+    # ... and a design change is still a failure on any platform.
+    metrics_file = cap / "metrics" / "layout-dark.json"
+    changed = json.loads(metrics_file.read_text(encoding="utf-8"))
+    changed["tokens"]["--bg"] = "#ffffff"
+    metrics_file.write_text(json.dumps(changed), encoding="utf-8")
+    assert vc.main() == 1
+    assert "--bg" in capsys.readouterr().err
+
+
+def test_the_geometry_switch_does_not_hide_a_missing_card():
+    """Inventory is not a measurement of text: a card that vanished is a
+    failure whatever platform recorded the baseline."""
+    shrunk = _metrics(cards=[_metrics()["cards"][0]])
+    problems = vc.compare_metrics(_metrics(), shrunk, geometry=False)
+    assert any("cards disappeared: ['B']" in p for p in problems)
+
+
+def test_the_geometry_switch_keeps_horizontal_overflow_out_of_the_verdict():
+    """Overflow is measured in text metrics, so a cross-platform run cannot
+    judge it — and must not look like it did."""
+    assert vc.compare_metrics(_metrics(), _metrics(overflow_x=True), geometry=False) == []

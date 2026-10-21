@@ -230,20 +230,29 @@ def diff_png(baseline: bytes, current: bytes,
 # --------------------------------------------------------------- metrics diff
 def compare_metrics(baseline: dict, current: dict,
                     tolerance: int = GEOMETRY_TOLERANCE_PX,
-                    doc_tolerance: int = DOCUMENT_TOLERANCE_PX) -> list[str]:
-    """Every way the layout differs, in the order an operator would fix them."""
+                    doc_tolerance: int = DOCUMENT_TOLERANCE_PX,
+                    geometry: bool = True) -> list[str]:
+    """Every way the layout differs, in the order an operator would fix them.
+
+    `geometry=False` keeps the checks that mean the same thing on every
+    platform — tokens, headings, which cards exist and in what order — and
+    drops the ones that measure text: fonts rasterise differently on macOS,
+    Windows and Linux, so a box that moved two pixels there says nothing
+    about the design. It is never used to excuse a token change.
+    """
     problems: list[str] = []
 
-    if baseline.get("viewport") != current.get("viewport"):
-        problems.append(f"viewport: {baseline.get('viewport')} → {current.get('viewport')}")
-    if bool(baseline.get("overflow_x")) != bool(current.get("overflow_x")):
-        problems.append("horizontal overflow appeared or disappeared "
-                        "(a row now scrolls sideways)")
-    for name in ("w", "h"):
-        was = (baseline.get("document") or {}).get(name)
-        now = (current.get("document") or {}).get(name)
-        if was is None or now is None or abs(was - now) > doc_tolerance:
-            problems.append(f"document {name}: {was} → {now}")
+    if geometry:
+        if baseline.get("viewport") != current.get("viewport"):
+            problems.append(f"viewport: {baseline.get('viewport')} → {current.get('viewport')}")
+        if bool(baseline.get("overflow_x")) != bool(current.get("overflow_x")):
+            problems.append("horizontal overflow appeared or disappeared "
+                            "(a row now scrolls sideways)")
+        for name in ("w", "h"):
+            was = (baseline.get("document") or {}).get(name)
+            now = (current.get("document") or {}).get(name)
+            if was is None or now is None or abs(was - now) > doc_tolerance:
+                problems.append(f"document {name}: {was} → {now}")
 
     base_tokens = baseline.get("tokens") or {}
     cur_tokens = current.get("tokens") or {}
@@ -271,6 +280,9 @@ def compare_metrics(baseline: dict, current: dict,
         if not missing and not extra:
             problems.append(f"card order changed: {base_titles} → {cur_titles}")
         return problems     # per-card geometry is meaningless once the list moved
+
+    if not geometry:
+        return problems
 
     for base_card, cur_card in zip(base_cards, cur_cards):
         title = base_card.get("title") or "(untitled)"
@@ -387,11 +399,17 @@ def compare(baseline_dir: Path, current_png: Path, current_metrics: Path,
             problems.append(f"{theme}: no metrics captured")
             continue
         current = json.loads(metrics_file.read_text(encoding="utf-8"))
-        theme_problems = compare_metrics(baseline["themes"][theme], current)
+        theme_problems = compare_metrics(baseline["themes"][theme], current,
+                                         geometry=not allow_cross_platform)
         problems += [f"{theme}: {p}" for p in theme_problems]
 
         theme_pngs = 0
-        for base_png in sorted(baseline_dir.glob(f"dash-{theme}-*.png")):
+        # Pixels are only comparable against a baseline recorded by the same
+        # rasteriser. Cross-platform runs say so in the report rather than
+        # comparing images they cannot compare and calling the noise drift.
+        base_pngs = ([] if allow_cross_platform
+                     else sorted(baseline_dir.glob(f"dash-{theme}-*.png")))
+        for base_png in base_pngs:
             new_png = current_png / base_png.name
             if not new_png.exists():
                 problems.append(f"{theme}: screenshot {base_png.name} was not captured")
@@ -401,7 +419,10 @@ def compare(baseline_dir: Path, current_png: Path, current_metrics: Path,
             if not diff["ok"]:
                 problems.append(f"{theme}: {base_png.name}: {diff['reason']}"
                                 + (f" (first at {diff['box']})" if diff.get("box") else ""))
-        report[theme] = {"screenshots": theme_pngs, "metric_problems": theme_problems}
+        report[theme] = {"screenshots": theme_pngs,
+                        "metric_problems": theme_problems,
+                        "pixels": not allow_cross_platform,
+                        "geometry": not allow_cross_platform}
     return problems, report
 
 
@@ -511,7 +532,12 @@ def main() -> int:
         if captured:
             print(f"the screenshots that failed this check: {workdir}", file=sys.stderr)
         return 1
-    print(f"ok: {shots} screenshots and {len(THEMES)} layouts match the baseline")
+    if args.allow_cross_platform:
+        print(f"ok: {len(THEMES)} layouts (tokens, headings, card inventory) match "
+              f"the baseline; pixels and geometry skipped — recorded on "
+              f"{baseline.get('platform')!r}, this run is {sys.platform!r}")
+    else:
+        print(f"ok: {shots} screenshots and {len(THEMES)} layouts match the baseline")
     return 0
 
 
