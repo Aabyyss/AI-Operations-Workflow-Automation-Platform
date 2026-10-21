@@ -86,11 +86,18 @@ jobs:
       - name: Visual check — tokens, headings and card inventory vs docs/screenshots
         env:
           AIOPS_MODE: mock
-        run: python -m scripts.visual_check --allow-cross-platform --capture-dir build/visual
+        run: python -m scripts.visual_check --allow-cross-platform --capture-dir build/visual --report build/visual/report.json
       - name: Keep the capture that failed the check
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: visual-capture
           path: build/visual
+          if-no-files-found: warn
+      - name: Keep the verdict on every run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-report
+          path: build/visual/report.json
           if-no-files-found: warn
