@@ -57,3 +57,25 @@ def test_prune_endpoint_dry_run_then_execute(client, monkeypatch):
     assert done["mode"] == "executed"
     remaining = json.loads((config.DATA_DIR / "feedback.json").read_text())
     assert [r["id"] for r in remaining] == ["fb_new"]
+
+
+def test_pruning_never_touches_signed_receipts(client, monkeypatch):
+    """A receipt is evidence someone else holds a copy of. Pruning this
+    deployment's copy would break the chain an auditor verifies against — so
+    `receipts` must stay out of the policy even when everything else is pruned
+    to nothing."""
+    from backend.retention import COLLECTION_LIMITS
+    ticket = {"customer_email": "a@b.com", "subject": "Charged twice",
+              "body": "You charged my card twice for $49, please refund one."}
+    client.post("/api/tickets", json=ticket)
+    before = client.get("/api/receipts").json()
+    assert before, "the ticket should have produced a signed receipt"
+
+    # Prune everything the policy does cover, aggressively.
+    for collection in list(COLLECTION_LIMITS):
+        monkeypatch.setitem(COLLECTION_LIMITS, collection, (0, 0))
+    assert client.post("/api/admin/prune?confirm=true").json()["mode"] == "executed"
+
+    after = client.get("/api/receipts").json()
+    assert [r["payload_sha256"] for r in after] == [r["payload_sha256"] for r in before]
+    assert client.get("/api/receipts/verify").json()["ok"] is True
