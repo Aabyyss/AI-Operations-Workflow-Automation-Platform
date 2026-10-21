@@ -401,3 +401,43 @@ def test_rotation_over_http_is_an_admin_mutation(monkeypatch):
                             headers={"X-API-Key": "admin-key"})
         assert again.status_code == 200
         assert len(again.json()["retired"]) == 2
+
+
+# ------------------------------------------------------------------- key age
+def test_key_age_is_measured_from_the_published_creation_date(monkeypatch):
+    from datetime import datetime, timezone
+    from backend import receipts
+
+    monkeypatch.setattr(receipts, "published_history", lambda: [
+        {"key_id": "k", "public_key": "aa" * 32,
+         "created_at": "2026-10-01T00:00:00+00:00", "retired_at": None}])
+
+    age = receipts.key_age_days(datetime(2026, 10, 11, 12, tzinfo=timezone.utc))
+    assert age == 10.5
+
+
+def test_a_key_without_a_creation_date_has_no_age(monkeypatch):
+    """An env-managed key, and a deployment that never signed, both answer
+    "unknown" — not 0, which would read as "rotated this morning"."""
+    from backend import receipts
+
+    monkeypatch.setattr(receipts, "published_history", lambda: None)
+    assert receipts.key_age_days() is None
+
+    monkeypatch.setattr(receipts, "published_history", lambda: [
+        {"key_id": "k", "public_key": "aa" * 32, "created_at": None}])
+    assert receipts.key_age_days() is None
+
+
+def test_a_rotated_key_resets_the_clock(monkeypatch):
+    from datetime import datetime, timezone
+    from backend import receipts
+
+    monkeypatch.setattr(receipts, "published_history", lambda: [
+        {"key_id": "old", "public_key": "aa" * 32,
+         "created_at": "2024-01-01T00:00:00+00:00",
+         "retired_at": "2026-01-01T00:00:00+00:00"},
+        {"key_id": "new", "public_key": "bb" * 32,
+         "created_at": "2026-01-01T00:00:00+00:00", "retired_at": None}])
+
+    assert receipts.key_age_days(datetime(2026, 1, 3, tzinfo=timezone.utc)) == 2.0

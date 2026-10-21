@@ -82,3 +82,54 @@ def test_health_never_reports_unknown_disabled_state(client):
     body = client.get("/api/health").json()
     assert body["checks"]["outbound_delivery"]["status"] in ("ok", "disabled")
     assert body["checks"]["outbound_delivery"]["target_configured"] is False
+
+
+def test_health_reports_the_receipt_signing_state(client):
+    """Rotation keeps old receipts verifiable, so nothing forces it — which is
+    why the key's age has to be visible somewhere an operator looks."""
+    check = client.get("/api/health").json()["checks"]["receipts"]
+    assert check["status"] == "ok"
+    assert check["rotation_due"] is False
+    assert check["managed_by"] in ("file", "environment")
+    assert check["published_keys"] >= 0
+
+
+def test_an_old_signing_key_turns_health_degraded(client, monkeypatch):
+    from backend import receipts as receipts_module
+    old = {"key_id": "abcd1234abcd1234", "public_key": "aa" * 32,
+           "created_at": "2020-01-01T00:00:00+00:00", "retired_at": None}
+    monkeypatch.setattr(receipts_module, "published_history", lambda: [old])
+
+    body = client.get("/api/health").json()
+    check = body["checks"]["receipts"]
+    assert check["status"] == "degraded"
+    assert check["rotation_due"] is True
+    assert "rotate with" in check["note"]
+    assert "receipts" in body["degraded"]
+    assert body["status"] == "degraded"
+
+
+def test_health_never_calls_an_env_managed_key_overdue(client, monkeypatch):
+    """A key this process cannot date is not an overdue key, and it is not
+    this deployment's to rotate."""
+    from backend import receipts as receipts_module
+    monkeypatch.setattr("backend.config.RECEIPT_KEY", "bb" * 32)
+    monkeypatch.setattr(receipts_module, "key_age_days", lambda now=None: None)
+
+    check = client.get("/api/health").json()["checks"]["receipts"]
+    assert check["managed_by"] == "environment"
+    assert check["rotation_due"] is False
+    assert check["status"] == "ok"
+    assert "not observable" in check["note"]
+
+
+def test_rotation_can_be_switched_off_by_config(client, monkeypatch):
+    from backend import receipts as receipts_module
+    old = {"key_id": "abcd1234abcd1234", "public_key": "aa" * 32,
+           "created_at": "2020-01-01T00:00:00+00:00", "retired_at": None}
+    monkeypatch.setattr(receipts_module, "published_history", lambda: [old])
+    monkeypatch.setattr("backend.config.RECEIPT_KEY_MAX_AGE_DAYS", 0.0)
+
+    check = client.get("/api/health").json()["checks"]["receipts"]
+    assert check["rotation_due"] is False
+    assert check["rotation_due_after_days"] is None
