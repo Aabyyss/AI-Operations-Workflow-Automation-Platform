@@ -9,9 +9,14 @@
 
 What is compared, and why each one is a different kind of check:
 
-* **Pixels** — the committed screenshots (docs/screenshots/dash-*.png) are
-  the visual baseline. A pixel diff catches what geometry cannot: a colour
-  that shifted, a shadow that disappeared, text that wrapped.
+* **Pixels** — the committed screenshots are the visual baseline. A pixel
+  diff catches what geometry cannot: a colour that shifted, a shadow that
+  disappeared, text that wrapped.
+
+Baselines are per platform (`docs/screenshots/<platform>/`), because the
+same CSS rasterises differently on Windows, macOS and Linux. A run compares
+against the baseline recorded by the same kind of machine, which is what
+lets CI judge pixels at all — a runner compares against a runner's baseline.
 * **Geometry** — every `.card`, its heading, and its box. A pixel diff can
   be *too* sensitive (antialiasing), so the layout is also compared as
   numbers, with a tolerance, which distinguishes "one card moved 40px" from
@@ -51,8 +56,53 @@ from scripts.console import use_utf8  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE_DIR = ROOT / "docs" / "screenshots"
-BASELINE_FILE = BASELINE_DIR / "layout-baseline.json"
 FIXTURES_DIR = BASELINE_DIR / "fixtures"
+
+
+def baseline_dir_for(platform: str) -> Path:
+    """Where the baseline for one platform lives.
+
+    Screenshots are not portable: the same CSS rasterises differently on
+    Windows, macOS and Linux because the fonts and the rasteriser differ.
+    So each platform gets its own directory — `docs/screenshots/<platform>/`
+    — and a run compares only against the baseline recorded by the same
+    kind of machine. That is what lets CI judge pixels at all: the runner
+    compares against a baseline recorded on a runner, not one recorded on
+    the maintainer's laptop.
+
+    The legacy flat layout (layout-baseline.json and dash-*.png directly
+    under docs/screenshots/) is still honored when its recorded platform
+    matches this one, so a checkout from before per-platform baselines
+    keeps working — and a baseline recorded elsewhere is never silently
+    reused here.
+    """
+    nested = BASELINE_DIR / platform
+    if (nested / "layout-baseline.json").exists():
+        return nested
+    # No baseline recorded here yet. A flat one is still a baseline — it may
+    # predate per-platform directories, or deliberately belong to another
+    # platform (which the platform check then turns into an actionable
+    # message, or into a cross-platform comparison when asked). Only when
+    # neither exists do we point at the nested path, so the "no baseline"
+    # message names where `--update` would write.
+    # Computed from the current BASELINE_DIR rather than cached at import:
+    # the tests point BASELINE_DIR somewhere else, and a constant frozen at
+    # import would keep looking in the real repository.
+    if (BASELINE_DIR / "layout-baseline.json").exists():
+        return BASELINE_DIR
+    return nested
+
+
+def _display(path: Path) -> str:
+    """A path shown relative to the repo when it is inside it.
+
+    Baseline directories live under the repo in practice and under a temp
+    directory in every test, so this cannot assume the former.
+    """
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
 THEMES = ("dark", "bright")
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -467,7 +517,9 @@ def main() -> int:
                          "temp dir) — how a failing CI run keeps the "
                          "screenshots that failed it")
     ap.add_argument("--no-capture", action="store_true",
-                    help="alias for --current without a fresh capture")
+                    help="do not run a capture; compare the capture --current "
+                         "names (rejected without it — a flag that claims not "
+                         "to capture must not capture anyway)")
     ap.add_argument("--url", default=None,
                     help="use this running server instead of starting one")
     ap.add_argument("--rerecord", action="store_true",
@@ -483,6 +535,11 @@ def main() -> int:
     if args.current is not None and args.capture_dir is not None:
         ap.error("--capture-dir captures; combine it with a comparison, not "
                  "--current")
+    if args.no_capture and args.current is None:
+        # The old behavior parsed --no-capture, ignored it, and captured
+        # anyway — the one thing the flag promises not to do.
+        ap.error("--no-capture needs --current DIR (there is nothing else "
+                 "to compare)")
 
     workdir = args.current
     captured = workdir is None
@@ -507,16 +564,19 @@ def main() -> int:
             return 2
 
     if args.update:
-        doc = update_baseline(BASELINE_DIR, png, metrics, sys.platform)
-        print(f"baseline updated: {len(doc['themes'])} themes, platform {sys.platform}")
+        target = baseline_dir_for(sys.platform)
+        doc = update_baseline(target, png, metrics, sys.platform)
+        print(f"baseline updated: {len(doc['themes'])} themes, platform "
+              f"{sys.platform} → {_display(target)}")
         return 0
 
     # "Cannot check" is its own exit code: a missing baseline or a baseline
     # from another platform must never be reported as drift, and never as ok.
-    baseline = load_baseline(BASELINE_DIR)
+    base_dir = baseline_dir_for(sys.platform)
+    baseline = load_baseline(base_dir)
     if baseline is None:
-        print(f"cannot check: no baseline at {BASELINE_FILE} — capture one on this "
-              f"platform with --update", file=sys.stderr)
+        print(f"cannot check: no baseline at {base_dir / 'layout-baseline.json'} — "
+              f"capture one on this platform with --update", file=sys.stderr)
         return 2
     if baseline.get("platform") != sys.platform and not args.allow_cross_platform:
         print(f"cannot check: the baseline was captured on "
@@ -525,7 +585,7 @@ def main() -> int:
               f"to compare only tokens and inventory", file=sys.stderr)
         return 2
 
-    problems, report = compare(BASELINE_DIR, png, metrics,
+    problems, report = compare(base_dir, png, metrics,
                               allow_cross_platform=args.allow_cross_platform)
     shots = sum(r["screenshots"] for r in report.values())
     if args.report is not None:

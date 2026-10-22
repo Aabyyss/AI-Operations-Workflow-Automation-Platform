@@ -398,3 +398,107 @@ def test_a_cross_platform_report_says_what_it_did_not_compare(tmp_path, monkeypa
     assert report["baseline_platform"] == "darwin"
     assert report["themes"]["dark"]["pixels"] is False
     assert report["themes"]["dark"]["geometry"] is False
+
+
+# -------------------------------------------------- per-platform baselines
+# Screenshots do not transfer between platforms: the same CSS rasterises
+# differently on Windows, macOS and Linux. Each platform therefore records
+# into its own directory, and a run compares against its own platform's
+# baseline — which is what makes a full pixel comparison possible in CI at
+# all, rather than the cross-platform half-check it used to settle for.
+
+def test_a_baseline_for_this_platform_is_found_in_its_own_directory(tmp_path, monkeypatch):
+    root = tmp_path / "screenshots"
+    cap = tmp_path / "cap"
+    _write_capture(cap)
+    vc.update_baseline(root / sys.platform, cap / "png", cap / "metrics", sys.platform)
+    monkeypatch.setattr(vc, "BASELINE_DIR", root)
+
+    assert vc.baseline_dir_for(sys.platform) == root / sys.platform
+
+
+def test_a_baseline_recorded_elsewhere_is_not_silently_reused(tmp_path, monkeypatch):
+    """A macOS baseline must not be read as if it described this machine.
+
+    With no baseline for this platform, the resolver points at the
+    directory `--update` would write, so the "no baseline" message names
+    a path the operator can actually create.
+    """
+    root = tmp_path / "screenshots"
+    cap = tmp_path / "cap"
+    _write_capture(cap)
+    vc.update_baseline(root / "darwin", cap / "png", cap / "metrics", "darwin")
+    monkeypatch.setattr(vc, "BASELINE_DIR", root)
+
+    resolved = vc.baseline_dir_for(sys.platform)
+    assert resolved == root / sys.platform
+    assert not (resolved / "layout-baseline.json").exists()
+
+
+def test_the_platform_directory_wins_over_a_flat_one(tmp_path, monkeypatch):
+    """Once a platform directory exists it is the baseline, even if a stale
+    flat one is still lying around from before per-platform baselines."""
+    root = tmp_path / "screenshots"
+    cap = tmp_path / "cap"
+    _write_capture(cap)
+    vc.update_baseline(root, cap / "png", cap / "metrics", sys.platform)      # flat, legacy
+    vc.update_baseline(root / sys.platform, cap / "png", cap / "metrics", sys.platform)
+    monkeypatch.setattr(vc, "BASELINE_DIR", root)
+
+    assert vc.baseline_dir_for(sys.platform) == root / sys.platform
+
+
+def test_a_flat_baseline_from_another_platform_is_still_honored(tmp_path, monkeypatch):
+    """The legacy layout is not deleted by this change: a flat baseline
+    belonging to another platform is still found, so the platform check can
+    turn it into an actionable message instead of "no baseline at all"."""
+    root = tmp_path / "screenshots"
+    cap = tmp_path / "cap"
+    _write_capture(cap)
+    vc.update_baseline(root, cap / "png", cap / "metrics", "darwin")
+    monkeypatch.setattr(vc, "BASELINE_DIR", root)
+
+    assert vc.baseline_dir_for(sys.platform) == root
+
+
+def test_update_writes_into_the_platform_directory(tmp_path, monkeypatch, capsys):
+    cap = tmp_path / "cap"
+    _write_capture(cap)
+    root = tmp_path / "screenshots"
+    monkeypatch.setattr(vc, "BASELINE_DIR", root)
+    monkeypatch.setattr(sys, "argv", ["visual_check", "--current", str(cap), "--update"])
+
+    assert vc.main() == 0
+    assert (root / sys.platform / "layout-baseline.json").exists()
+    assert (root / sys.platform / "dash-dark-full.png").exists()
+    out = capsys.readouterr().out
+    assert sys.platform in out           # the message names where it wrote
+
+
+def test_no_capture_without_a_capture_to_compare_is_an_error(tmp_path, monkeypatch):
+    """--no-capture used to be parsed, ignored, and followed by a capture
+    anyway — the exact opposite of what it says."""
+    monkeypatch.setattr(sys, "argv", ["visual_check", "--no-capture"])
+    with pytest.raises(SystemExit) as exc:
+        vc.main()
+    assert exc.value.code == 2
+
+
+def test_no_capture_with_a_capture_does_not_capture(tmp_path, monkeypatch):
+    """Given --current, --no-capture must not run a capture: it compares the
+    capture it was pointed at."""
+    cap = tmp_path / "cap"
+    _write_capture(cap)
+    baseline = tmp_path / "baseline"
+    _baseline_from(cap, baseline)
+    monkeypatch.setattr(vc, "BASELINE_DIR", baseline)
+    calls = []
+
+    def boom(*a, **k):
+        calls.append(1)
+        raise AssertionError("capture() must not run")
+
+    monkeypatch.setattr(vc, "capture", boom)
+    monkeypatch.setattr(sys, "argv", ["visual_check", "--no-capture", "--current", str(cap)])
+    assert vc.main() == 0
+    assert calls == []
