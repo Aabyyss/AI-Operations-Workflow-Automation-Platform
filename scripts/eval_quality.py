@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from scripts.console import use_utf8  # noqa: E402
 from backend import config  # noqa: E402
 from backend.models import Ticket  # noqa: E402
 
@@ -178,6 +179,7 @@ def report(correct: int, total: int, results: list[dict]) -> None:
 
 
 def main() -> int:
+    use_utf8()          # the report title and its verdict line print —
     _isolate_data_dir()
     try:
         correct, total, results = run_eval()

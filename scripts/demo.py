@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from scripts.console import use_utf8  # noqa: E402
 from datetime import datetime, timezone  # noqa: E402
 
 from backend import config, designer, pipeline  # noqa: E402
@@ -292,6 +293,7 @@ def summary() -> None:
 
 
 if __name__ == "__main__":
+    use_utf8()          # the demo prints — and … throughout its narrative
     reset_data()
     side_a()
     side_b()

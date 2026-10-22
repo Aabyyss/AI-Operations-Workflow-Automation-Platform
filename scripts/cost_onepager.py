@@ -22,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from scripts.console import use_utf8  # noqa: E402
 from backend.cost_compare import compare_costs  # noqa: E402
 from backend.models import CostComparisonRequest  # noqa: E402
 from backend.one_pager import render_one_pager  # noqa: E402
@@ -32,6 +33,7 @@ DEFAULT_OUT = Path(__file__).resolve().parent.parent / "marketing" / "cost-one-p
 
 
 def main() -> int:
+    use_utf8()          # the report prints · and — between its figures
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default=str(DEFAULT_OUT),

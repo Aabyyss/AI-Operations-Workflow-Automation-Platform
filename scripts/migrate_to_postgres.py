@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from scripts.console import use_utf8  # noqa: E402
 from backend import config  # noqa: E402
 from backend.store import COLLECTION_NAMES, storage as json_storage  # noqa: E402
 
@@ -50,6 +51,7 @@ def embed_corpus(dsn: str) -> int:
 
 
 def main() -> int:
+    use_utf8()          # the no-DSN error prints — to stderr
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dsn", default=config.DATABASE_URL,
                     help="Postgres DSN (defaults to AIOPS_DATABASE_URL)")

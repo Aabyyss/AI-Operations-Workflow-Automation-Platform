@@ -23,6 +23,11 @@ import argparse
 import re
 import sys
 from decimal import Decimal, getcontext
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from scripts.console import use_utf8  # noqa: E402
 
 getcontext().prec = 150
 
@@ -109,6 +114,7 @@ def embedded(html: str) -> dict[str, list[int]]:
 
 
 def main() -> int:
+    use_utf8()          # the docstring's — reaches --help, where it is bytes
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--update", action="store_true",
