@@ -27,6 +27,21 @@ def health_report() -> dict:
     except OSError as exc:
         checks["storage"] = {"status": "error", "error": str(exc)}
 
+    # A collection file that would not parse is data loss, not an empty
+    # report: the store quarantined the bytes and recorded the incident, and
+    # saying "ok" here would be the last quiet failure worth fearing.
+    corruptions = list(getattr(storage, "corruptions", []))
+    if corruptions:
+        slot = checks.setdefault("storage", {})
+        slot["unreadable_files"] = [
+            {"collection": c["collection"], "error": c["error"],
+             "preserved_at": c.get("quarantined")}
+            for c in corruptions]
+        # Unwritable storage is the worse news and must not be downgraded to
+        # "degraded" just because we also found an unreadable file.
+        if slot.get("status") != "error":
+            slot["status"] = "degraded"
+
     # Knowledge corpus: the RAG index must be non-empty for grounded drafts.
     n_chunks = len(retriever.index.docs)
     checks["knowledge"] = {
