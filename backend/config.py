@@ -109,7 +109,29 @@ LOG_FORMAT = os.getenv("AIOPS_LOG_FORMAT", "plain")
 # Env-overridable so ops can tune per deployment without a code change.
 # ---------------------------------------------------------------------------
 AUTO_EXECUTE_MAX_RISK = float(os.getenv("AIOPS_AUTO_EXECUTE_MAX_RISK", "0.30"))  # <= this -> run without a human
-BLOCK_MIN_RISK = 0.85            # > this -> never auto-run, always review
+BLOCK_MIN_RISK = float(os.getenv("AIOPS_BLOCK_MIN_RISK", "0.85"))  # > this -> never auto-run, always review
+
+# The ladder has two ways to fall over once both ends are knobs, so both are
+# checked at import — a governance rule nobody can rely on is worse than no
+# rule, and neither misconfiguration fails visibly on its own:
+#
+#   * block <= auto would block exactly the band the ladder promises to run,
+#     silently inverting the documented "≤ 0.30 auto, > 0.85 block".
+#   * block > 1.0 can never fire: risk is clamped to 1.0 before it is
+#     compared, so the hard block would stand there armed and inert while
+#     every receipt kept recording it as in force.
+if BLOCK_MIN_RISK <= AUTO_EXECUTE_MAX_RISK:
+    raise RuntimeError(
+        "AIOPS_BLOCK_MIN_RISK must be greater than AIOPS_AUTO_EXECUTE_MAX_RISK "
+        f"(got block={BLOCK_MIN_RISK}, auto={AUTO_EXECUTE_MAX_RISK}): between "
+        "them they define which tickets run without a human, and a block at or "
+        "below the auto threshold contradicts the ladder the governance "
+        "documentation promises")
+if BLOCK_MIN_RISK > 1.0:
+    raise RuntimeError(
+        f"AIOPS_BLOCK_MIN_RISK={BLOCK_MIN_RISK} can never be reached: risk is "
+        "clamped to 1.0 before comparison, so the hard block would never fire "
+        "— keep it at or below 1.0")
 
 # Monetary limits: any action touching money above this always requires
 # human approval regardless of classifier confidence.

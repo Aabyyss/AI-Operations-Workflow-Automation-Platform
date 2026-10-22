@@ -18,6 +18,7 @@ to `.env`). Defaults are safe: **mock mode, offline, no keys**.
 | `AIOPS_CHAT_MODEL` | `gpt-4o-mini` | chat model for live mode |
 | `AIOPS_EMBED_MODEL` | `text-embedding-3-small` | embedding model for live retrieval |
 | `AIOPS_AUTO_EXECUTE_MAX_RISK` | `0.30` | risk ≤ this runs without a human |
+| `AIOPS_BLOCK_MIN_RISK` | `0.85` | risk > this is a hard block (never auto-run); must stay **above** the auto threshold and **≤ 1.0**, or the app refuses to boot |
 | `AIOPS_MONETARY_APPROVAL_LIMIT_USD` | `500` | money actions above this always need approval |
 | `AIOPS_MIN_RETRIEVAL_SCORE` | `0.15` | below this, retrieval is "weak" → escalate |
 | `AIOPS_MIN_AUTO_CONFIDENCE` | `0.75` | blended confidence floor for auto-execution |
@@ -28,7 +29,13 @@ to `.env`). Defaults are safe: **mock mode, offline, no keys**.
 | `AIOPS_RECEIPT_KEY` | — | hex Ed25519 seed signing decision receipts; unset = generated once into `data/receipt_signing_key.json` |
 
 Changing a governance threshold is a **governance decision** — see
-[GOVERNANCE.md](GOVERNANCE.md), not a tuning knob.
+[GOVERNANCE.md](GOVERNANCE.md), not a tuning knob. The two ends of the
+ladder (`AIOPS_AUTO_EXECUTE_MAX_RISK`, `AIOPS_BLOCK_MIN_RISK`) are also
+validated against each other at boot: a block at or below the auto
+threshold would block exactly what the ladder promises to run, and a block
+above 1.0 can never fire because risk is clamped first. Either missetting
+stops the app with that message rather than starting it with a rule that
+doesn't mean what the documentation says.
 
 ## 2. Storage layout
 
