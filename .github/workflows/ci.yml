@@ -73,12 +73,16 @@ jobs:
 
   visual:
     # The dashboard's look is an artifact like any other: this job fails when
-    # a card disappears, a design token changes, or a section reorders. It
-    # records on ubuntu-latest while the committed baseline was recorded on
-    # the maintainer's machine, so it runs --allow-cross-platform, which
-    # compares tokens, headings and card inventory exactly and skips the
-    # pixel/geometry comparison those do not survive. A capture of the real
-    # pixels is uploaded when the job fails, so the reviewer sees the page.
+    # a card disappears, a design token changes, or a section reorders — and,
+    # once a baseline recorded on this runner is committed, when a pixel or a
+    # card box moves too.
+    #
+    # Baselines are per platform (fonts and the rasteriser differ), and a
+    # Linux baseline cannot be invented by a Windows machine. So the first
+    # run records one from the runner itself: it still gates tokens, headings
+    # and inventory against the committed baseline, mints the Linux baseline,
+    # and hands it back as an artifact to commit as docs/screenshots/linux/.
+    # Every run after that compares pixels and geometry in full.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -92,10 +96,39 @@ jobs:
         run: |
           npm install --no-save playwright-core
           npx playwright-core install --with-deps chromium
-      - name: Visual check — tokens, headings and card inventory vs docs/screenshots
+      - name: Is there a baseline recorded on this runner?
+        id: baseline
+        run: |
+          if [ -f docs/screenshots/linux/layout-baseline.json ]; then
+            echo "mode=full" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=bootstrap" >> "$GITHUB_OUTPUT"
+            echo "No Linux baseline committed yet — this run will record one."
+          fi
+      - name: Visual check — pixels, geometry, tokens and inventory
+        if: steps.baseline.outputs.mode == 'full'
         env:
           AIOPS_MODE: mock
-        run: python -m scripts.visual_check --allow-cross-platform --capture-dir build/visual --report build/visual/report.json
+        run: python -m scripts.visual_check --capture-dir build/visual --report build/visual/report.json
+      - name: Record the runner's baseline, and gate what still transfers
+        if: steps.baseline.outputs.mode == 'bootstrap'
+        env:
+          AIOPS_MODE: mock
+        run: |
+          # Order matters: the cross-platform check runs first, so real token
+          # or inventory drift still fails this job. Only a run that passed
+          # gets to mint a baseline — a gate must not quietly adopt whatever
+          # it just failed to compare.
+          python -m scripts.visual_check --allow-cross-platform --capture-dir build/visual --report build/visual/report.json
+          python -m scripts.visual_check --update --current build/visual
+          echo "::warning::No baseline was recorded on linux — one was recorded this run. Commit the visual-baseline-linux artifact as docs/screenshots/linux/ to turn on the pixel and geometry comparison."
+      - name: Hand back the baseline this runner recorded
+        if: steps.baseline.outputs.mode == 'bootstrap'
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baseline-linux
+          path: docs/screenshots/linux
+          if-no-files-found: error
       - name: Keep the capture that failed the check
         if: failure()
         uses: actions/upload-artifact@v4
