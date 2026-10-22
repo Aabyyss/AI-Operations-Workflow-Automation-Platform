@@ -375,12 +375,13 @@ deployment would be asked for it before go-live.
   `WWW-Authenticate: Bearer` when enabled.
 - **Signed n8n intake** (`POST /api/tickets/signed`): HMAC-SHA256
   signature + timestamp replay window (`AIOPS_WEBHOOK_SECRET`,
-  `AIOPS_WEBHOOK_MAX_SKEW`), constant-time verification, mirror of the
+  `AIOPS_WEBHOOK_MAX_SKEW_S`), constant-time verification, mirror of the
   plain intake contract.
-- **Opt-in rate limiting** (`AIOPS_RATE_LIMIT`, `AIOPS_RATE_WINDOW`):
+- **Opt-in rate limiting** (`AIOPS_RATE_LIMIT`, `AIOPS_RATE_LIMIT_WINDOW_S`):
   fixed-window per-IP limiter, 429 with `Retry-After`, `X-RateLimit-*`
   headers, exempt `/health`.
-- **Structured request logging** (`AIOPS_REQUEST_LOG_FILE`): one JSON
+- **Structured request logging** (`AIOPS_LOG_FORMAT=json`, plus
+  `AIOPS_REQUEST_LOG_FILE` to append the same records to a file): one JSON
   line per request with request-ID propagation, latency, status, and
   auth/rate-limit rejections included.
 - **`/ready` readiness probe**: checks the RAG corpus is loaded and the

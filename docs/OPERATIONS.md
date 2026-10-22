@@ -27,6 +27,8 @@ to `.env`). Defaults are safe: **mock mode, offline, no keys**.
 | `AIOPS_ADMIN_KEY` | — | role-scoped key: admin mutations (prune) — never approval decisions |
 | `AIOPS_SHADOW` | `0` | `1` scores every ticket through the real gates and executes nothing (no draft, refund, review or run record); see §8 |
 | `AIOPS_RECEIPT_KEY` | — | hex Ed25519 seed signing decision receipts; unset = generated once into `data/receipt_signing_key.json` |
+| `AIOPS_LOG_FORMAT` | `plain` | `json` emits one machine-parseable line per request to stdout (id, method, path, status, duration, client) |
+| `AIOPS_REQUEST_LOG_FILE` | — | with `AIOPS_LOG_FORMAT=json`, append the same records to this file; a file that cannot be written warns once and stdout keeps the records |
 
 Changing a governance threshold is a **governance decision** — see
 [GOVERNANCE.md](GOVERNANCE.md), not a tuning knob. The two ends of the

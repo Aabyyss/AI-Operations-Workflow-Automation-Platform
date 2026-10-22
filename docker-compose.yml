@@ -8,17 +8,45 @@ services:
       - AIOPS_MODE=${AIOPS_MODE:-mock}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - AIOPS_CHAT_MODEL=${AIOPS_CHAT_MODEL:-gpt-4o-mini}
+      # ---- model routing (inert until set; empty follows the chat model) ----
+      - AIOPS_LIGHT_MODEL=${AIOPS_LIGHT_MODEL:-}
+      - AIOPS_HEAVY_MODEL=${AIOPS_HEAVY_MODEL:-}
+      - AIOPS_EMBED_MODEL=${AIOPS_EMBED_MODEL:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       # ---- security (all off by default) ----
       - AIOPS_API_KEY=${AIOPS_API_KEY:-}
+      - AIOPS_APPROVER_KEY=${AIOPS_APPROVER_KEY:-}
+      - AIOPS_ADMIN_KEY=${AIOPS_ADMIN_KEY:-}
       - AIOPS_SHADOW=${AIOPS_SHADOW:-0}
       - AIOPS_RECEIPT_KEY=${AIOPS_RECEIPT_KEY:-}
+      - AIOPS_RECEIPT_KEY_MAX_AGE_DAYS=${AIOPS_RECEIPT_KEY_MAX_AGE_DAYS:-}
       - AIOPS_WEBHOOK_SECRET=${AIOPS_WEBHOOK_SECRET:-}
       - AIOPS_RATE_LIMIT=${AIOPS_RATE_LIMIT:-0}
+      - AIOPS_RATE_LIMIT_WINDOW_S=${AIOPS_RATE_LIMIT_WINDOW_S:-}
+      - AIOPS_WEBHOOK_MAX_SKEW_S=${AIOPS_WEBHOOK_MAX_SKEW_S:-}
+      # ---- governance thresholds (the ladder in docs/GOVERNANCE.md) ----
+      # Every one of these is a governance decision; see OPERATIONS §1.
+      - AIOPS_AUTO_EXECUTE_MAX_RISK=${AIOPS_AUTO_EXECUTE_MAX_RISK:-}
+      - AIOPS_BLOCK_MIN_RISK=${AIOPS_BLOCK_MIN_RISK:-}
+      - AIOPS_MONETARY_APPROVAL_LIMIT_USD=${AIOPS_MONETARY_APPROVAL_LIMIT_USD:-}
+      - AIOPS_MIN_RETRIEVAL_SCORE=${AIOPS_MIN_RETRIEVAL_SCORE:-}
+      - AIOPS_MIN_AUTO_CONFIDENCE=${AIOPS_MIN_AUTO_CONFIDENCE:-}
+      # ---- economics ----
+      - AIOPS_MONTHLY_BUDGET_USD=${AIOPS_MONTHLY_BUDGET_USD:-}
+      # ---- outbound delivery (empty = outbox stays a durable queue) ----
+      - AIOPS_OUTBOX_URL=${AIOPS_OUTBOX_URL:-}
+      - AIOPS_OUTBOX_SECRET=${AIOPS_OUTBOX_SECRET:-}
       # ---- observability ----
       - AIOPS_REQUEST_LOG_FILE=${AIOPS_REQUEST_LOG_FILE:-}
+      - AIOPS_LOG_FORMAT=${AIOPS_LOG_FORMAT:-}
+      - AIOPS_API_BASE_URL=${AIOPS_API_BASE_URL:-}
       # ---- storage (json default; postgres via the profile below) ----
       - AIOPS_STORAGE=${AIOPS_STORAGE:-json}
       - AIOPS_DATABASE_URL=${AIOPS_DATABASE_URL:-postgresql://aiops:aiops@postgres:5432/aiops}
+      # AIOPS_DATA_DIR is deliberately NOT passed through: inside the
+      # container the path is fixed by the ./data:/app/data mount below, and
+      # setting it from .env would write outside the mounted volume — data
+      # that survives `docker compose down` only exists under ./data.
     volumes:
       - ./data:/app/data
       - ./knowledge_base:/app/knowledge_base

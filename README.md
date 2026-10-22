@@ -115,8 +115,8 @@ docker compose up --build    # API on :8000, n8n on :5678
 
 For shared deployments, set the opt-in protections from `.env.example`:
 `AIOPS_API_KEY` (API auth), `AIOPS_WEBHOOK_SECRET` (signed n8n intake),
-`AIOPS_RATE_LIMIT` (per-IP limiter), `AIOPS_REQUEST_LOG_FILE` (structured
-logs). Backups: `python -m scripts.backup --retention 14`.
+`AIOPS_RATE_LIMIT` (per-IP limiter), `AIOPS_LOG_FORMAT=json` +
+`AIOPS_REQUEST_LOG_FILE` (structured logs to stdout and to a file). Backups: `python -m scripts.backup --retention 14`.
 
 Prefer a real database? `docker compose --profile postgres up` +
 `AIOPS_STORAGE=postgres` runs the identical API on Postgres/JSONB, and live

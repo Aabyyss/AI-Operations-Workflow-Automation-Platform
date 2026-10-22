@@ -5,6 +5,14 @@ AIOPS_LOG_FORMAT=json and every request emits one machine-parseable JSON
 line to stdout: request id (propagated from X-Request-ID when a caller
 sends one), method, path, status, duration, client.
 
+Set AIOPS_REQUEST_LOG_FILE too and the same line is appended to that file.
+stdout alone is not durable — the container's stream leaves with the
+container — and a shipper pointed at a file is the common setup.
+
+A log sink is never allowed to fail a request: if the file cannot be
+opened or written, the record still goes to stdout, one warning says why,
+and the middleware carries on.
+
 Registered last so it *wraps* the auth and rate-limit middlewares — a 401
 or 429 is an http_request log line too, which is exactly what you want
 when investigating an incident.
@@ -23,9 +31,28 @@ from .ratelimit import client_ip
 
 NOISY_PATHS = {"/health", "/ready"}
 
+# A file sink that failed once says so once, then stops: a request path is
+# not where a repeating warning belongs, and the failure is usually sticky.
+_file_warning_shown = False
+
 
 def _emit(record: dict) -> None:
-    print(json.dumps(record, separators=(",", ":")), flush=True)
+    line = json.dumps(record, separators=(",", ":"))
+    print(line, flush=True)
+    path = config.REQUEST_LOG_FILE
+    if not path:
+        return
+    global _file_warning_shown
+    try:
+        # Append, one open per record: cheap at this request rate, and it
+        # keeps working when the file is rotated or truncated underneath us.
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+    except OSError as exc:
+        if not _file_warning_shown:
+            _file_warning_shown = True
+            print(f"request log file unavailable ({exc}); continuing with "
+                  f"stdout only", flush=True)
 
 
 def install_request_logging(app: FastAPI) -> None:
