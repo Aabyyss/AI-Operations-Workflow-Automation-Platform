@@ -94,8 +94,13 @@ async function layoutMetrics(page, theme) {
     }));
     const tokens = {};
     const style = getComputedStyle(document.documentElement);
+    // The design system's semantic colours are --good/--warn/--bad
+    // (docs/DESIGN_SYSTEM.md). This list once asked for --ok, which the
+    // dashboard has never defined: the gate recorded an empty string for it
+    // on both sides of every comparison and stayed permanently green while
+    // the success colour drifted underneath it.
     for (const token of ["--bg", "--surface", "--surface-2", "--text", "--muted",
-                         "--border", "--accent", "--ok", "--bad", "--warn"]) {
+                         "--border", "--accent", "--good", "--bad", "--warn"]) {
       tokens[token] = style.getPropertyValue(token).trim();
     }
     return {

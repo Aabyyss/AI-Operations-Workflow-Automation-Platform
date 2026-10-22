@@ -20,7 +20,7 @@
     "--muted": "#95a2c6",
     "--border": "#26325a",
     "--accent": "#6d9bff",
-    "--ok": "",
+    "--good": "#45dea0",
     "--bad": "#ff7c88",
     "--warn": "#ffbe63"
    },
@@ -199,7 +199,7 @@
     "--muted": "#586683",
     "--border": "#dfe6f2",
     "--accent": "#2a5fe0",
-    "--ok": "",
+    "--good": "#0a7a52",
     "--bad": "#c8283c",
     "--warn": "#8a5300"
    },
