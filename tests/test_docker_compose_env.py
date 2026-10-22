@@ -31,13 +31,30 @@ FORWARD_EXEMPT = {"AIOPS_DATA_DIR"}
 
 
 def _variables_read_by_the_app() -> set[str]:
-    """Every AIOPS_* name the backend reads, from _env() and os.getenv()."""
+    """Every AIOPS_* name the backend and scripts read, from _env()/os.getenv().
+
+    scripts/ counts too: AIOPS_BACKUP_DIR, AIOPS_DATA_DIR and the receipt
+    tooling's overrides are read there, and a scan of backend/ alone called
+    both of those "unread" while an operator was setting them in good faith.
+    """
     names: set[str] = set()
-    for path in (ROOT / "backend").rglob("*.py"):
-        source = path.read_text(encoding="utf-8")
-        names |= set(re.findall(r"""(?:_env|os\.getenv)\(\s*["'](AIOPS_[A-Z0-9_]+)""",
-                                source))
+    for root in (ROOT / "backend", ROOT / "scripts"):
+        for path in root.rglob("*.py"):
+            source = path.read_text(encoding="utf-8")
+            names |= set(re.findall(r"""(?:_env|os\.getenv)\(\s*["'](AIOPS_[A-Z0-9_]+)""",
+                                    source))
     return names
+
+
+def _variables_template_lists() -> set[str]:
+    """Every AIOPS_* name .env.example offers to the operator.
+
+    The template is what people actually copy, so a variable missing here
+    is one they will never set, and a name here that no code reads is one
+    they will set and never see take effect.
+    """
+    source = (ROOT / ".env.example").read_text(encoding="utf-8")
+    return set(re.findall(r"^(?:export )?(AIOPS_[A-Z0-9_]+)=", source, re.M))
 
 
 def _variables_compose_forwards() -> set[str]:
@@ -68,6 +85,29 @@ def test_every_variable_compose_forwards_is_one_the_app_actually_reads():
                      if n not in read and not n.startswith(("OPENAI_", "AIOPS_DATA")))
     assert unknown == [], (
         f"docker-compose.yml forwards variables no code reads: {unknown}")
+
+
+def test_the_template_lists_every_variable_the_app_reads():
+    """Three-way parity, in the direction that costs the most to get wrong:
+    a variable read by the app but absent from .env.example is one nobody
+    is ever told exists — the doc row and the compose line both point at a
+    template that never mentions it."""
+    read = _variables_read_by_the_app()
+    template = _variables_template_lists()
+    missing = sorted(read - template)
+    assert missing == [], (
+        f"read by the app but missing from .env.example: {missing}")
+
+
+def test_every_variable_in_the_template_is_one_the_app_reads():
+    """The other direction: AIOPS_RATE_WINDOW and AIOPS_WEBHOOK_MAX_SKEW
+    sat in the template under names no code ever read, so copying the file
+    set two knobs that did nothing. (Both had a different real name.)"""
+    read = _variables_read_by_the_app()
+    template = _variables_template_lists()
+    dead = sorted(template - read)
+    assert dead == [], (
+        f".env.example offers variables no code reads: {dead}")
 
 
 def test_the_exempt_variable_is_the_documented_one():

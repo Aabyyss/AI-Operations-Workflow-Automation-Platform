@@ -36,6 +36,10 @@ services:
       # ---- outbound delivery (empty = outbox stays a durable queue) ----
       - AIOPS_OUTBOX_URL=${AIOPS_OUTBOX_URL:-}
       - AIOPS_OUTBOX_SECRET=${AIOPS_OUTBOX_SECRET:-}
+      # ---- backups (scripts/backup.py) ----
+      # Default lands on ./data_backups via the mount below: a snapshot
+      # inside the container is not a backup, it is the same single disk.
+      - AIOPS_BACKUP_DIR=${AIOPS_BACKUP_DIR:-/app/data_backups}
       # ---- observability ----
       - AIOPS_REQUEST_LOG_FILE=${AIOPS_REQUEST_LOG_FILE:-}
       - AIOPS_LOG_FORMAT=${AIOPS_LOG_FORMAT:-}
@@ -49,6 +53,7 @@ services:
       # that survives `docker compose down` only exists under ./data.
     volumes:
       - ./data:/app/data
+      - ./data_backups:/app/data_backups
       - ./knowledge_base:/app/knowledge_base
     restart: unless-stopped
     healthcheck:
