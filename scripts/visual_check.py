@@ -303,6 +303,8 @@ def compare_metrics(baseline: dict, current: dict,
         for name in ("w", "h"):
             was = (baseline.get("document") or {}).get(name)
             now = (current.get("document") or {}).get(name)
+            if was is None and now is None:
+                continue        # neither side measured it — not a change
             if was is None or now is None or abs(was - now) > doc_tolerance:
                 problems.append(f"document {name}: {was} → {now}")
 
