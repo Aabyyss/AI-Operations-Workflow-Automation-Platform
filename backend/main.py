@@ -603,13 +603,36 @@ def analytics_summary() -> dict:
 @app.post("/api/admin/prune")
 def prune_collections(confirm: bool = False,
                       _role: str = Depends(require_admin)) -> dict:
-    """Apply retention policy (dry-run by default; confirm=true to execute)."""
+    """Apply retention policy (dry-run by default; confirm=true to execute).
+
+    Tickets referenced by surviving runs are never pruned: they are the
+    replay source those runs execute from, and losing one turns
+    `POST /api/runs/{id}/replay` into a 409 for history that still exists.
+    The promise is in DATA_MODEL and the retention docstring; this is the
+    code that keeps it.
+    """
     from .models import iso_now
 
-    report: dict[str, int] = {}
+    # Plan every collection up front: the tickets protection needs to know
+    # which runs survive, and a cross-collection contract must not depend
+    # on iteration order.
+    plans: dict[str, tuple[list[dict], list[dict]]] = {}
     for collection, (max_age_days, max_records) in COLLECTION_LIMITS.items():
-        records = storage.all(collection)
-        keep, prune = select_for_prune(records, max_age_days, max_records)
+        plans[collection] = select_for_prune(storage.all(collection),
+                                             max_age_days, max_records)
+
+    keep_tickets, prune_tickets = plans.get("tickets", ([], []))
+    surviving_run_tickets = {r.get("ticket_id")
+                             for r in plans.get("runs", ([], []))[0]}
+    protected = [t for t in prune_tickets
+                 if t.get("id") in surviving_run_tickets]
+    if protected:
+        plans["tickets"] = (keep_tickets + protected,
+                            [t for t in prune_tickets
+                             if t.get("id") not in surviving_run_tickets])
+
+    report: dict[str, int] = {}
+    for collection, (keep, prune) in plans.items():
         report[collection] = len(prune)
         if confirm and prune:
             storage.replace_all(collection, keep)

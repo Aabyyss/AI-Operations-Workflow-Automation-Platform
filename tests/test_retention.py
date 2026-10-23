@@ -79,3 +79,49 @@ def test_pruning_never_touches_signed_receipts(client, monkeypatch):
     after = client.get("/api/receipts").json()
     assert [r["payload_sha256"] for r in after] == [r["payload_sha256"] for r in before]
     assert client.get("/api/receipts/verify").json()["ok"] is True
+
+
+def test_prune_keeps_tickets_that_surviving_runs_reference(client, monkeypatch):
+    """The retention contract: pruning never orphans a run.
+
+    DATA_MODEL and the retention docstring both promise tickets referenced
+    by surviving runs are kept so replay still works — before this test,
+    nothing enforced it, and a tickets prune could turn
+    `POST /api/runs/{id}/replay` into a 409 for history that still exists.
+    """
+    import json
+    from datetime import timedelta
+
+    from backend.retention import COLLECTION_LIMITS
+    # Only the aged tickets buffer is tightened: the aged set would lose
+    # everything beyond its newest 0 records — unless protection applies.
+    monkeypatch.setitem(COLLECTION_LIMITS, "tickets", (90, 0))
+
+    r = client.post("/api/tickets", json={
+        "customer_email": "a@b.com", "subject": "Charged twice",
+        "body": "Charged twice - $49.00 on the 3rd and again on the 5th. "
+                "Please refund one."})
+    assert r.status_code == 200
+    ticket_id = r.json()["ticket_id"]
+    run = client.get("/api/runs").json()[-1]
+    assert run["ticket_id"] == ticket_id
+
+    # Age the ticket past the 90-day cutoff; its run stays fresh.
+    path = config.DATA_DIR / "tickets.json"
+    records = json.loads(path.read_text(encoding="utf-8"))
+    for rec in records:
+        if rec["id"] == ticket_id:
+            rec["created_at"] = (NOW - timedelta(days=400)).isoformat()
+    path.write_text(json.dumps(records), encoding="utf-8")
+
+    dry = client.post("/api/admin/prune").json()
+    assert dry["would_prune"]["tickets"] == 0   # protected, not pruned
+
+    done = client.post("/api/admin/prune?confirm=true").json()
+    assert done["pruned"]["tickets"] == 0
+    kept = json.loads(path.read_text(encoding="utf-8"))
+    assert ticket_id in {t["id"] for t in kept}
+
+    # The promise's observable outcome: replay still executes.
+    replay = client.post(f"/api/runs/{run['id']}/replay")
+    assert replay.status_code == 200
