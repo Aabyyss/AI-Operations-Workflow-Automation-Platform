@@ -106,3 +106,43 @@ def test_audit_log_records_events(client):
         "steps": [{"name": "s", "minutes_per_item": 1, "repetitive": True}]})
     events = [e["event"] for e in client.get("/api/audit").json()]
     assert "process_analyzed" in events
+
+
+def test_list_analyses_returns_what_analyze_stored(client):
+    """GET /api/analyses had no direct contract test — the read side of
+    Side A's store, which the dashboard's analysis list renders from."""
+    assert client.get("/api/analyses").json() == []
+    payload = {
+        "name": "Refund Handling", "department": "support",
+        "monthly_volume": 500, "hourly_rate_usd": 25,
+        "steps": [{"name": "Review refund", "minutes_per_item": 3,
+                   "touches_money": True}],
+    }
+    client.post("/api/analyze", json=payload)
+    rows = client.get("/api/analyses").json()
+    assert len(rows) == 1
+    assert rows[0]["name"] == "Refund Handling"
+    assert "score" in rows[0] and "costs" in rows[0]
+
+
+def test_budget_endpoint_disabled_by_default(client, monkeypatch):
+    """GET /api/analytics/budget: the endpoint shape operators alert on.
+    Disabled (budget 0) is the honest default state, not an error."""
+    monkeypatch.setattr("backend.config.MONTHLY_BUDGET_USD", 0.0)
+    body = client.get("/api/analytics/budget").json()
+    assert body["enabled"] is False
+    assert body.get("alert") in (False, None)
+
+
+def test_outbox_deliver_endpoint_wraps_the_flusher(client, monkeypatch):
+    """POST /api/outbox/deliver is the cron/n8n entry point for the whole
+    outbox — it must answer even when delivery is unconfigured, saying why
+    it did nothing instead of looking like a queue that vanished."""
+    from backend import config
+    monkeypatch.setattr(config, "OUTBOX_URL", "")
+    r = client.post("/api/outbox/deliver")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["attempted"] == 0
+    assert body["waiting"] == 0
+    assert "not configured" in body["reason"]
