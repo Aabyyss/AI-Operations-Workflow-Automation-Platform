@@ -43,3 +43,33 @@ def test_metrics_reports_queues_and_feedback(client):
     assert 'aiops_feedback_total{rating="up"} 1' in body
     assert 'aiops_feedback_total{rating="down"} 0' in body
     assert "aiops_knowledge_chunks" in body
+
+
+def test_outbox_gauge_counts_queued_items(client):
+    """The pending gauge must read queue depth, not log rows.
+
+    A queued action carries no status until first attempted, so counting
+    `status == "pending"` over the raw append-only log reported 0 while
+    items sat waiting — and one item retried three times read as 3.
+    """
+    from backend.store import storage
+    storage.append("outbox", {"id": "out_g1", "kind": "email",
+                              "ts": "2026-10-01T00:00:00Z"})
+    body = client.get("/metrics").text
+    assert "aiops_outbox_pending 1" in body
+
+    # One item, two failed attempts -> still depth 1, never 2.
+    storage.append("outbox", {"id": "out_g1", "status_update": True,
+                              "status": "pending", "attempts": 1,
+                              "ts": "2026-10-01T00:00:01Z"})
+    storage.append("outbox", {"id": "out_g1", "status_update": True,
+                              "status": "pending", "attempts": 2,
+                              "ts": "2026-10-01T00:00:02Z"})
+    body = client.get("/metrics").text
+    assert "aiops_outbox_pending 1" in body
+
+    # Delivered -> depth 0.
+    storage.append("outbox", {"id": "out_g1", "status_update": True,
+                              "status": "delivered", "attempts": 3,
+                              "ts": "2026-10-01T00:00:03Z"})
+    assert "aiops_outbox_pending 0" in client.get("/metrics").text

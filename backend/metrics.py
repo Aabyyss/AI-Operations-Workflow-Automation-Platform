@@ -66,7 +66,8 @@ def render_prometheus(runs: list[dict], reviews: list[dict],
     lines.append("# TYPE aiops_reviews_pending gauge")
     lines.append(_line("aiops_reviews_pending", None, pending))
 
-    out_pending = sum(1 for o in outbox if o.get("status") == "pending")
+    out_pending = sum(1 for o in outbox
+                      if o.get("status", "pending") == "pending")
     lines.append("# HELP aiops_outbox_pending Outbound actions awaiting delivery.")
     lines.append("# TYPE aiops_outbox_pending gauge")
     lines.append(_line("aiops_outbox_pending", None, out_pending))

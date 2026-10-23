@@ -49,6 +49,37 @@ def test_health_flags_dead_letters_as_degraded(client, monkeypatch):
     assert "outbox" in body["degraded"]
 
 
+def test_health_forgets_a_dead_letter_once_it_is_reset(client):
+    """The report reads the folded view, not the append-only history:
+    otherwise an item an operator already reset keeps the deployment
+    degraded forever, and the red light cannot be cleared."""
+    from backend import outbound
+    from backend import store as store_module
+    store_module.storage.append("outbox", {
+        "id": "out_dead", "kind": "email", "status": "dead",
+        "attempts": 3, "ts": "2026-01-01T00:00:00Z",
+    })
+    assert client.get("/api/health").json()["checks"]["outbox"]["dead_letters"] == 1
+
+    outbound.retry("out_dead")  # operator reset -> pending again
+    checks = client.get("/api/health").json()["checks"]
+    assert checks["outbox"]["dead_letters"] == 0
+    assert checks["outbox"]["status"] == "ok"
+    assert checks["outbox"]["pending_delivery"] == 1
+    assert "outbox" not in client.get("/api/health").json()["degraded"]
+
+
+def test_health_counts_queued_work_as_pending(client):
+    """An item queued but never attempted is still delivery pending."""
+    from backend import store as store_module
+    store_module.storage.append("outbox", {
+        "id": "out_new", "kind": "refund", "ts": "2026-01-01T00:00:00Z",
+    })
+    checks = client.get("/api/health").json()["checks"]
+    assert checks["outbox"]["pending_delivery"] == 1
+    assert checks["outbox"]["status"] == "ok"
+
+
 def test_health_flags_pending_approval_backlog(client):
     from backend import store as store_module
     store_module.storage.append("reviews", {

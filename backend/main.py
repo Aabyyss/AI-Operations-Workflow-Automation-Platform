@@ -519,7 +519,11 @@ def prometheus_metrics() -> Response:
         reviews=storage.all("reviews"),
         usage=storage.all("usage"),
         feedback=storage.all("feedback"),
-        outbox=storage.all("outbox"),
+        # Folded view, not the raw log: one entry per outbox item carrying its
+        # current status. The raw log holds a record per transition, so the
+        # pending gauge used to count status-update rows — reporting depth 2
+        # for a single retried item, and 0 for items never yet attempted.
+        outbox=outbound.outbox_view(),
         knowledge_chunks=len(retriever.index.docs),
     )
     return Response(content=body, media_type=metrics.CONTENT_TYPE)

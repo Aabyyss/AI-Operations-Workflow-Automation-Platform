@@ -187,7 +187,7 @@ change fails CI instead of silently breaking a scheduled refresh.
 | `POST /api/runs/{id}/replay` | re-execute a stored ticket, diff disposition + response |
 | `GET /api/runs/stream` | SSE tail of new runs (backfills recent history on connect) |
 | `POST /api/runs/{id}/feedback` · `GET /api/feedback` | operator thumbs + corrections |
-| `POST /api/outbox/deliver` | flush queued actions as signed webhooks (`AIOPS_OUTBOX_URL`) |
+| `POST /api/outbox/deliver` | flush queued actions as signed webhooks (`AIOPS_OUTBOX_URL`), honoring per-item backoff; summary reports `waiting` (cooling down) alongside `attempted/delivered/deferred/dead` |
 | `POST /api/outbox/{id}/retry` | reset a dead delivery with a fresh retry budget |
 | `GET /api/deliveries` | audit-grade ledger of every delivery attempt |
 | `POST /api/admin/prune` | retention dry-run; `?confirm=true` executes (see §7) |
@@ -197,7 +197,7 @@ change fails CI instead of silently breaking a scheduled refresh.
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/health` | component report: storage record counts, corpus chunks, queue backlog (≥ 100 pending → degraded), outbox dead letters, delivery config, gateway mode/tiers, budget posture. Needs a key when auth is on — use `/health` or `/ready` for probes |
+| `GET /api/health` | component report: storage record counts, corpus chunks, queue backlog (≥ 100 pending → degraded), outbox dead letters + pending delivery depth, delivery config, gateway mode/tiers, budget posture. Needs a key when auth is on — use `/health` or `/ready` for probes |
 | `GET /api/knowledge` | corpus inventory: id, title, chunk count, size, last modified |
 | `POST /api/knowledge` | create/update a policy document; replacing requires explicit `overwrite` (409 otherwise); index reloads before responding |
 | `GET /api/knowledge/{doc_id}` · `DELETE /api/knowledge/{doc_id}` | read / remove a document (index reloads immediately) |

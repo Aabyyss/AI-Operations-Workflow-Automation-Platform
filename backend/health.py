@@ -57,11 +57,16 @@ def health_report() -> dict:
     }
 
     # Outbound deliveries: pending is normal; dead letters are not.
-    dead = sum(1 for o in storage.all("outbox")
-               if o.get("status") == "dead")
+    # Counted from the folded view: the raw log keeps every historical
+    # status record, so an item that died and was later reset would stay
+    # "dead" here forever — a stuck red light an operator cannot clear.
+    view = outbound.outbox_view()
+    dead = sum(1 for o in view if o.get("status") == "dead")
+    pending = sum(1 for o in view if o.get("status", "pending") == "pending")
     checks["outbox"] = {
         "status": "ok" if dead == 0 else "degraded",
         "dead_letters": dead,
+        "pending_delivery": pending,
     }
 
     # Outbound delivery worker: enabled or explicitly disabled — never "unknown".

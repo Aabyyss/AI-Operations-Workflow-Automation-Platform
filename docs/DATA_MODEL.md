@@ -20,7 +20,7 @@ default: the demo, tests and CI never need a database.
 | `reviews.json` | escalation agent | `ReviewRequest`: `risk_score`, `reason`, `proposed_response`, `status` (`pending/approved/rejected`), `reviewed_by`, `decision_note` | Ground truth for gate precision |
 | `usage.json` | LLM gateway | `UsageRecord`: `agent`, `model`, `tokens_in/out`, `cost_usd`, `mode`, `tier` | Powers cost analytics, budget, per-tier routing checks |
 | `audit.json` | `integrations.audit` | `{ts, event, payload, correlation_id}` | JSONL-equivalent audit trail; dashboard tail + `/api/audit` |
-| `outbox.json` | action agent | outbound action: `action`, `status` (`pending/delivered/dead`), `attempts`, `last_error` | Durable outbound queue; delivered records are never resent |
+| `outbox.json` | action agent + outbound worker | base row: `kind`, `ts`, payload; state rows: `status_update:true`, `status` (`pending/delivered/dead`), `attempts`, `last_error`, `not_before?` | Durable outbound queue, append-only: state changes are *added* rows, folded by `outbound.outbox_view()` (newest wins). Delivered records are never resent; `not_before` is the exponential-backoff gate (2/4/8/16 s) |
 | `deliveries.json` | outbound worker | delivery attempt ledger: `outbox_id`, `ok`, `attempts`, `status_update` | Signed-delivery audit trail |
 | `workflows.json` | `POST /api/workflows/design` | design record: `process_id`, `node_count` (full n8n JSON only via download endpoint) | List stays small; the importable graph is generated on demand |
 | `feedback.json` | `POST /api/runs/{id}/feedback` | `Feedback`: `run_id`, `rating` (`up/down`), `correction?`, `reviewer` | Satisfaction analytics + recall proxy for the quality gate |
