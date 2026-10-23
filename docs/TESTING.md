@@ -1,7 +1,7 @@
 # Testing Guide
 
 What the suite pins, how to run it, and how to extend it without
-weakening it. Current state: **354 tests across 44 files**, green in CI on
+weakening it. Current state: **530 tests across 54 files**, green in CI on
 Python 3.11 / 3.12 / 3.13, plus an eval-quality gate. Everything runs
 offline — no test touches the network.
 
