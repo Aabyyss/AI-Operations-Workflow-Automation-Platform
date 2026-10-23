@@ -25,7 +25,7 @@ from .llm import get_llm, record_usage
 from .models import (
     AgentTrace, DecisionResult, Disposition, DraftResponse, IntakeResult,
     KnowledgeResult, PipelineResult, Priority, QualityResult, ReviewRequest,
-    Ticket, TicketCategory, iso_now, new_id,
+    Ticket, TicketCategory,
 )
 from .rag import retriever
 

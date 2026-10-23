@@ -742,7 +742,6 @@ class ManualCycleRecord(BaseModel):
 @app.post("/api/analytics/ab/records", status_code=201)
 def record_manual_cycle(rec: ManualCycleRecord) -> dict:
     """Stamp a cycle time for the manual cohort (human handled it, no AI)."""
-    from .ab_testing import COHORTS
 
     if rec.cycle_seconds <= 0:
         raise HTTPException(422, "cycle_seconds must be positive")

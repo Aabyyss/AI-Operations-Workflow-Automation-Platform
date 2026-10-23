@@ -13,7 +13,7 @@ from __future__ import annotations
 import hmac
 from collections.abc import Awaitable, Callable
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from . import config

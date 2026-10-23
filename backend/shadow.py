@@ -24,7 +24,6 @@ priority, never the body or the address.
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any
 
 from . import config, store
 from .integrations.audit import audit_log

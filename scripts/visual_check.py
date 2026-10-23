@@ -37,7 +37,6 @@ not read as a pass.
 from __future__ import annotations
 
 import argparse
-import filecmp
 import json
 import os
 import shutil

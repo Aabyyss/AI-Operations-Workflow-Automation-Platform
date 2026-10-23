@@ -7,7 +7,6 @@ contracts stay identical to the live path.
 """
 from __future__ import annotations
 
-import json
 import re
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")

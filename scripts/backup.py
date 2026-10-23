@@ -24,7 +24,7 @@ import os
 import re
 import sys
 import tarfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Make `python -m scripts.backup` work from the repo root.
