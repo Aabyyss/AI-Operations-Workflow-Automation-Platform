@@ -17,7 +17,8 @@ Two sides in one system — **AI Product Management** (business case) and
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env            # optional — defaults run offline in mock mode
+cp .env.example .env            # optional — defaults run offline in mock mode;
+                                # read at startup, real env vars still win
 python -m scripts.demo          # end-to-end walkthrough, prints ROI + pipeline results
 python -m scripts.eval_quality  # governance eval: routing accuracy + escalation recall
 uvicorn backend.main:app --reload

@@ -10,6 +10,16 @@ layout, the n8n bridge, monitoring feeds, and troubleshooting.
 All runtime settings come from environment variables (copy `.env.example`
 to `.env`). Defaults are safe: **mock mode, offline, no keys**.
 
+The `.env` file is read at startup by the app itself — no plugin, no
+`load_dotenv` call, it is part of `config.py` — so it applies everywhere:
+uvicorn, the Windows launcher, and every `python -m scripts.*` command, not
+only under Docker Compose. Precedence is **real environment beats file
+beats default**: a variable already exported (CI, compose's `${VAR:-}`
+substitution, a shell) is never overwritten by the file, and a value the
+file leaves out falls through to the default in the table below. Comments
+start a line of their own; values may be quoted; a `#` inside a value is
+kept literally.
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `AIOPS_MODE` | `mock` | `mock` = deterministic pipeline; `live` = real LLM calls |

@@ -30,6 +30,69 @@ def _env(name: str, default: str = "") -> str:
 # Paths
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def load_env_file(path: Path) -> dict[str, str]:
+    """Load KEY=VALUE lines from `path` into the environment.
+
+    The README has always said `cp .env.example .env`, and nothing outside
+    Docker ever read that file: no load_dotenv, no dependency, so every
+    documented setting was silently ignored when running locally — uvicorn,
+    the desktop launcher and every script in scripts/.
+
+    Rules, in the order they matter:
+
+    * **The real environment wins.** A variable already set (compose's
+      substitution, CI, a shell export, the test suite) is never overwritten;
+      the file only supplies what is absent. That is also what keeps the
+      capture server in scripts/visual_check.py honest — it points
+      AIOPS_DATA_DIR at a temp directory in the child's environment, and
+      that must beat whatever the developer's .env says.
+    * **No comment interpretation, no interpolation, no escape sequences.**
+      Values are taken literally between quotes; a `#` inside a value stays.
+      A fuller grammar would be a second implementation of dotenv for no
+      gain — the template uses comments on their own lines and bare values.
+    * **Never raises.** An unreadable or malformed file is skipped
+      line-by-line; configuration must not be able to stop the process that
+      needs it. A line with no `=` is not a setting and is ignored.
+
+    Returns what this call actually set, which is what the tests assert on.
+    """
+    applied: dict[str, str] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        # No file is the normal case (the repo ships .env.example only), and
+        # a corrupt one must not be the reason the API will not start.
+        return applied
+
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        name, sep, value = line.partition("=")
+        if not sep:
+            continue                       # not a setting; say nothing, take it
+        name = name.strip()
+        if not name or not all(c.isalnum() or c == "_" for c in name) \
+                or name[0].isdigit():
+            continue                       # not a legal variable name
+        if name in os.environ:
+            continue                       # the real environment wins
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]            # strip matching quotes, keep the rest
+        os.environ[name] = value
+        applied[name] = value
+    return applied
+
+
+# The file the README tells people to create. Read once, here, so every
+# entry point — API, scripts, the desktop launcher — gets the same answer,
+# and before the first _env() call below so those reads see it.
+load_env_file(PROJECT_ROOT / ".env")
 # The storage directory. Overridable because the offline receipt tooling
 # (scripts/rotate_receipt_key.py, scripts/verify_receipt.py) runs in its own
 # process and has to be pointed at a deployment's data dir explicitly.
