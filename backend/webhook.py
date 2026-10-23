@@ -51,7 +51,7 @@ def verify(payload: bytes, header: str | None, secret: str | None = None) -> Non
     except ValueError as exc:
         raise WebhookAuthError("malformed signature") from exc
 
-    skew = getattr(config, "WEBHOOK_MAX_SKEW_S", 300)
+    skew = config.WEBHOOK_MAX_SKEW_S
     if abs(time.time() - ts) > skew:
         raise WebhookAuthError("signature timestamp outside allowed skew")
 

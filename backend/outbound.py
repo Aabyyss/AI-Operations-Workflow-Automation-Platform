@@ -14,8 +14,8 @@ retried.
 
 Backoff is per-item and self-clocked through ``not_before``, so a record
 keeps its own cooling-off window across multiple ``deliver_pending``
-polls. The vanity constant ``BASE_DELAY_S`` is kept only for
-documentation.
+polls. The base delay doubles per failed attempt (``BASE_DELAY_S``:
+2 s, 4 s, 8 s, 16 s).
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from .store import storage
 from .webhook import sign
 
 MAX_ATTEMPTS = 5
-BASE_DELAY_S = 2.0  # exponential: 2, 4, 8, 16 seconds (doc-only; backoff is in _backoff_s)
+BASE_DELAY_S = 2.0  # exponential: 2, 4, 8, 16 seconds
 
 
 def _utcnow() -> datetime:
