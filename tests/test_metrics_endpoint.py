@@ -73,3 +73,29 @@ def test_outbox_gauge_counts_queued_items(client):
                               "status": "delivered", "attempts": 3,
                               "ts": "2026-10-01T00:00:03Z"})
     assert "aiops_outbox_pending 0" in client.get("/metrics").text
+
+
+def test_outbox_gauge_counts_never_attempted_items(client):
+    """An item queued before any attempt must still register as pending."""
+    from backend.store import storage
+    storage.append("outbox", {"id": "out_g2", "kind": "refund",
+                              "ts": "2026-10-01T00:00:00Z"})
+    body = client.get("/metrics").text
+    assert "aiops_outbox_pending 1" in body
+
+
+def test_outbox_gauge_forgets_a_reset_dead_letter(client):
+    """A dead item that was reset to pending no longer counts as dead."""
+    from backend.store import storage
+    storage.append("outbox", {"id": "out_g3", "kind": "crm_update",
+                              "ts": "2026-10-01T00:00:00Z"})
+    # Dead, then operator reset:
+    storage.append("outbox", {"id": "out_g3", "status_update": True,
+                              "status": "dead", "attempts": 5,
+                              "ts": "2026-10-01T00:00:01Z"})
+    storage.append("outbox", {"id": "out_g3", "status_update": True,
+                              "status": "pending", "attempts": 0,
+                              "ts": "2026-10-01T00:00:02Z"})
+    body = client.get("/metrics").text
+    assert "aiops_outbox_pending 1" in body
+    assert "aiops_outbox_pending 0" not in body

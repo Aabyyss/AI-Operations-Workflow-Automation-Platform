@@ -11,6 +11,11 @@ Nothing here pretends a vendor API exists: without AIOPS_OUTBOX_URL the
 deliverer is a no-op and the outbox stays the durable queue it already
 is. Wire a real endpoint in and the same records flow out, signed and
 retried.
+
+Backoff is per-item and self-clocked through ``not_before``, so a record
+keeps its own cooling-off window across multiple ``deliver_pending``
+polls. The vanity constant ``BASE_DELAY_S`` is kept only for
+documentation.
 """
 from __future__ import annotations
 
@@ -26,7 +31,7 @@ from .store import storage
 from .webhook import sign
 
 MAX_ATTEMPTS = 5
-BASE_DELAY_S = 2.0  # exponential: 2, 4, 8, 16 seconds
+BASE_DELAY_S = 2.0  # exponential: 2, 4, 8, 16 seconds (doc-only; backoff is in _backoff_s)
 
 
 def _utcnow() -> datetime:
@@ -174,3 +179,17 @@ def outbox_view() -> list[dict]:
         else:
             state[rec["id"]] = {**rec, "status": rec.get("status", "pending"), "attempts": 0}
     return sorted(state.values(), key=lambda r: r.get("ts", ""), reverse=True)
+
+
+def outbox_dead_count(outbox: list[dict] | None = None) -> int:
+    """How many outbox items currently carry status=dead (folded view)."""
+    return sum(1 for o in (outbox or outbox_view()) if o.get("status") == "dead")
+
+
+def outbox_pending_count(outbox: list[dict] | None = None) -> int:
+    """How many outbox items currently carry status=pending (folded view).
+
+    Exportable so the Prometheus and health consumers share one definition
+    instead of each duplicating the fold logic.
+    """
+    return sum(1 for o in (outbox or outbox_view()) if o.get("status", "pending") == "pending")

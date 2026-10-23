@@ -231,3 +231,29 @@ def test_view_folds_status_updates():
     rec = next(r for r in view if r["id"] == "out_test1")
     assert rec["status"] == "delivered"
     assert rec["kind"] == "refund"  # base fields survive folding
+
+
+def test_dead_count_ignores_a_reset_item():
+    """A dead-then-reset item is no longer dead in the fold."""
+    outbound.storage.append("outbox", {
+        "id": "o2", "kind": "crm_update", "ts": "2026-10-01T00:00:00Z",
+    })
+    outbound.storage.append("outbox", {
+        "id": "o2", "status_update": True, "status": "dead",
+        "attempts": 5, "ts": "2026-10-01T00:00:01Z",
+    })
+    outbound.storage.append("outbox", {
+        "id": "o2", "status_update": True, "status": "pending",
+        "attempts": 0, "ts": "2026-10-01T00:00:02Z",
+    })
+    assert outbound.outbox_dead_count() == 0
+    assert outbound.outbox_pending_count() == 1
+
+
+def test_pending_count_includes_never_attempted_items():
+    """An action queued but never attempted still counts as pending."""
+    outbound.storage.append("outbox", {
+        "id": "o3", "kind": "email", "ts": "2026-10-01T00:00:00Z",
+    })
+    assert outbound.outbox_pending_count() == 1
+    assert outbound.outbox_dead_count() == 0

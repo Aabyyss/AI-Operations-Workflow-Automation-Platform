@@ -1,8 +1,24 @@
 """Tests for GET /api/health — the component health report."""
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from backend.store import storage  # noqa: E402
+
+
+def iso_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _append_reset_outbox(store, oid="oh1"):
+    """A reset dead-letter: base, dead, then pending."""
+    store.append("outbox", {"id": oid, "kind": "refund", "ts": iso_now()})
+    store.append("outbox", {"id": oid, "status_update": True,
+                             "status": "dead", "attempts": 5, "ts": iso_now()})
+    store.append("outbox", {"id": oid, "status_update": True,
+                             "status": "pending", "attempts": 0, "ts": iso_now()})
 
 
 def test_health_report_shape_and_ok_state(client):
@@ -42,6 +58,10 @@ def test_health_flags_dead_letters_as_degraded(client, monkeypatch):
         "id": "out_dead", "action": "email.send", "status": "dead",
         "attempts": 3, "created_at": "2026-01-01T00:00:00Z",
     })
+
+    # The folded view, not the raw append-only log, decides the count.
+    from backend import outbound
+    assert outbound.outbox_dead_count() == 1
     body = client.get("/api/health").json()
     assert body["checks"]["outbox"]["status"] == "degraded"
     assert body["checks"]["outbox"]["dead_letters"] == 1
@@ -67,6 +87,20 @@ def test_health_forgets_a_dead_letter_once_it_is_reset(client):
     assert checks["outbox"]["status"] == "ok"
     assert checks["outbox"]["pending_delivery"] == 1
     assert "outbox" not in client.get("/api/health").json()["degraded"]
+
+
+def test_health_reads_folded_outbox_dead_letters(client):
+    """A dead-then-reset item is no longer dead: the folded view, not the
+    raw log, decides the red light. Mirrors the real number in
+    outbound.outbox_dead_count()."""
+    _append_reset_outbox(storage)
+    checks = client.get("/api/health").json()["checks"]
+    assert checks["outbox"]["status"] == "ok"
+    assert checks["outbox"]["dead_letters"] == 0
+    assert checks["outbox"]["pending_delivery"] == 1
+    from backend import outbound
+    assert outbound.outbox_dead_count() == 0
+    assert outbound.outbox_pending_count() == 1
 
 
 def test_health_counts_queued_work_as_pending(client):
