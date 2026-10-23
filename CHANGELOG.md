@@ -6,6 +6,41 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **`cp .env.example .env` now actually does something.** Until now nothing
+  outside Docker read the file — no loader, no dependency — so every
+  documented setting was silently ignored by uvicorn, the desktop launcher
+  and every script. `backend/config.py` loads it at import time with the
+  real environment always winning, `.env.example` gained the settings it
+  never listed and lost a duplicate `AIOPS_BACKUP_DIR` whose dead copy
+  carried the better comment, and `webhook.py` stopped defensively
+  `getattr`-ing a config value that is always defined.
+- **Outbox: the documented backoff runs, and the queues read state, not
+  history.** `BASE_DELAY_S` was defined and never read, so a deliver
+  endpoint polled every second burned the five-attempt budget in five
+  seconds; retries now gate per item on `not_before` (2/4/8/16 s) and the
+  flush summary reports `waiting`. `/api/health` and the
+  `aiops_outbox_pending` gauge read the folded view: an item an operator
+  already reset no longer keeps the deployment degraded forever, and a
+  queued item that was never attempted counts as pending instead of
+  invisible. Both counts now live in one exported helper
+  (`outbox_dead_count`/`outbox_pending_count`) so the two consumers
+  cannot drift apart.
+- **The LangGraph orchestration's human-review route works.**
+  `node_escalate` read `state["draft"]` on a route where no draft node had
+  ever run (a KeyError that could not have survived first use), and the
+  wiring skipped the draft the module's own diagram promises — so graph-
+  queued reviews would have carried an empty proposed response. Both
+  fixed.
+
+### Added
+- **Tests for what nothing exercised**: `tests/test_graph.py` covers both
+  graph routes end-to-end plus route/disposition parity with the plain
+  pipeline; `tests/test_demo.py` runs the end-to-end demo stage by stage;
+  and contract tests now hit the three API routes no test had ever
+  touched — `GET /api/analyses`, `GET /api/analytics/budget`,
+  `POST /api/outbox/deliver`.
+
 ### Changed
 - **Dashboard: a real bright mode, and a design system behind it.** The light
   palette used to be the dark palette inverted, resolved by an attribute that
