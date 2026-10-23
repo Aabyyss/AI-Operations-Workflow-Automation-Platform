@@ -90,9 +90,14 @@ def node_execute(state: PipelineState) -> dict:
 def node_escalate(state: PipelineState) -> dict:
     from .models import DecisionResult, DraftResponse
     trace = []
+    # draft is guaranteed by the wiring (the human branch routes through
+    # draft_human first, mirroring run_pipeline's draft-then-escalate), but
+    # tolerate its absence so a malformed state queues an empty review
+    # instead of crashing the graph.
+    draft = state.get("draft") or {"text": "", "grounded_in": []}
     review = pipeline.run_escalation(
         state["ticket_obj"], DecisionResult(**state["decision"]),
-        DraftResponse(**(state["draft"] or {"text": "", "grounded_in": []})), trace)
+        DraftResponse(**draft), trace)
     return {"route": "human_review", "result": {"review_id": review.id}}
 
 
@@ -105,15 +110,19 @@ def build_graph():
     g.add_node("draft_auto", node_draft_auto)
     g.add_node("quality", node_quality)
     g.add_node("execute", node_execute)
+    g.add_node("draft_human", node_draft_auto)  # same drafting logic; the
+    # human branch must draft before escalating, exactly as run_pipeline does
     g.add_node("escalate", node_escalate)
 
     g.set_entry_point("intake")
     g.add_edge("intake", "knowledge")
     g.add_edge("knowledge", "decision")
-    g.add_conditional_edges("decision", route_after_decision, {"auto": "draft_auto", "human": "escalate"})
+    g.add_conditional_edges("decision", route_after_decision,
+                            {"auto": "draft_auto", "human": "draft_human"})
     g.add_edge("draft_auto", "quality")
     g.add_edge("quality", "execute")
     g.add_edge("execute", END)
+    g.add_edge("draft_human", "escalate")
     g.add_edge("escalate", END)
     return g.compile()
 
