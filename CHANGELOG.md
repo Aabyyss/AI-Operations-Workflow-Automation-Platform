@@ -32,6 +32,19 @@ versioning follows [SemVer](https://semver.org/spec/v2.0.0.html).
   wiring skipped the draft the module's own diagram promises — so graph-
   queued reviews would have carried an empty proposed response. Both
   fixed.
+- **Retention now keeps the promise it was written with.** DATA_MODEL and
+  the retention docstring both say tickets referenced by surviving runs
+  are kept so replay still works — no code enforced it, and an aged
+  tickets prune could delete the original ticket of a run that still
+  exists, turning `POST /api/runs/{id}/replay` into a 409 for history the
+  deployment claims to keep. `prune_collections` now plans all
+  collections up front and subtracts the tickets surviving runs replay
+  from; the regression test ends by replaying the run, which failed
+  before.
+- **Docs: the test-count claims.** README advertised 468 tests in three
+  places while TESTING.md claimed 354 across 44 files — both stale and
+  mutually contradictory. The suite is 530 tests across 54 files,
+  verified green by a full run before the numbers were written.
 
 ### Added
 - **Tests for what nothing exercised**: `tests/test_graph.py` covers both
